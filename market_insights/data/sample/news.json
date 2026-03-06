@@ -1,0 +1,32 @@
+{
+  "AAPL": [
+    {
+      "title": "Apple services momentum remains a key profitability driver",
+      "link": "",
+      "published_at": "2026-03-01",
+      "content": "Services growth and installed base remain central to margin resilience."
+    },
+    {
+      "title": "Supply chain efficiency supports Apple gross margin",
+      "link": "",
+      "published_at": "2026-02-22",
+      "content": "Operational efficiency may help preserve cash generation despite hardware cycles."
+    }
+  ],
+  "MSFT": [
+    {
+      "title": "Cloud and Copilot demand support Microsoft narrative",
+      "link": "",
+      "published_at": "2026-03-02",
+      "content": "Azure and AI monetization remain major catalysts for long-term growth."
+    }
+  ],
+  "NVDA": [
+    {
+      "title": "AI capex keeps Nvidia in focus",
+      "link": "",
+      "published_at": "2026-03-03",
+      "content": "GPU demand and datacenter spend continue to influence premium valuation."
+    }
+  ]
+}

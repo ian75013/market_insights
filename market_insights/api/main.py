@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from market_insights.db.bootstrap import init_db
@@ -9,24 +9,31 @@ from market_insights.services.market_service import MarketInsightService
 
 
 init_db()
-app = FastAPI(title="Market Insights API", version="1.0.0")
+app = FastAPI(title="Market Insights API", version="2.0.0")
 service = MarketInsightService()
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "2.0.0"}
 
 
-@app.get("/tickers")
-def tickers():
-    return {"tickers": ["AAPL", "MSFT", "NVDA"]}
+@app.get("/sources")
+def sources():
+    return {
+        "price_providers": ["sample", "stooq", "ibkr"],
+        "document_providers": ["sample_fundamentals", "sample_news", "rss", "sec_company_facts"],
+    }
 
 
 @app.post("/etl/run")
-def run_pipeline(ticker: str, db: Session = Depends(get_db)):
+def run_pipeline(
+    ticker: str = Query(..., min_length=1),
+    provider: str = Query("sample"),
+    db: Session = Depends(get_db),
+):
     try:
-        return run_etl(db, ticker)
+        return run_etl(db, ticker=ticker, provider=provider)
     except Exception as exc:  # pragma: no cover
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -45,3 +52,8 @@ def insight(ticker: str, db: Session = Depends(get_db)):
         return service.generate_insight(db, ticker)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/rag/sources/{ticker}")
+def rag_sources(ticker: str, db: Session = Depends(get_db)):
+    return {"ticker": ticker.upper(), "sources": service.get_rag_sources(db, ticker)}

@@ -1,27 +1,36 @@
-from sqlalchemy import Column, Date, Float, Integer, String, Text
+from sqlalchemy import Date, DateTime, Float, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from datetime import datetime, UTC
 
-from market_insights.db.session import Base
+
+class Base(DeclarativeBase):
+    pass
 
 
 class PriceBar(Base):
     __tablename__ = "price_bars"
 
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(16), index=True, nullable=False)
-    date = Column(Date, index=True, nullable=False)
-    open = Column(Float, nullable=False)
-    high = Column(Float, nullable=False)
-    low = Column(Float, nullable=False)
-    close = Column(Float, nullable=False)
-    volume = Column(Float, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker: Mapped[str] = mapped_column(String(16), index=True)
+    source: Mapped[str] = mapped_column(String(32), default="sample")
+    date: Mapped[Date] = mapped_column(Date, index=True)
+    open: Mapped[float] = mapped_column(Float)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[float] = mapped_column(Float)
 
 
-class InsightReport(Base):
-    __tablename__ = "insight_reports"
+class Document(Base):
+    __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True)
-    ticker = Column(String(16), index=True, nullable=False)
-    created_at = Column(String(32), nullable=False)
-    summary = Column(Text, nullable=False)
-    score = Column(Float, nullable=False)
-    fair_value = Column(Float, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticker: Mapped[str] = mapped_column(String(16), index=True)
+    source: Mapped[str] = mapped_column(String(64), index=True)
+    document_type: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    published_at: Mapped[str] = mapped_column(String(64), default="")
+    url: Mapped[str] = mapped_column(String(512), default="")
+    content: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

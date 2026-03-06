@@ -1,38 +1,23 @@
-"""DAG Airflow de démonstration.
-
-Ce fichier est prêt à être déplacé dans un environnement Airflow réel.
-"""
-
 from datetime import datetime
 
-try:
-    from airflow import DAG
-    from airflow.operators.python import PythonOperator
-except Exception:  # pragma: no cover
-    DAG = object
-    PythonOperator = object
+from airflow import DAG
+from airflow.operators.python import PythonOperator
 
 
-def _extract():
-    return "extract"
+def extract_prices():
+    print("Run ETL through application service or CLI seed script")
 
 
-def _transform():
-    return "transform"
+def refresh_rag():
+    print("Refresh retrieval index / document snapshots")
 
 
-def _load():
-    return "load"
-
-
-if DAG is not object:
-    with DAG(
-        dag_id="market_insights_daily",
-        start_date=datetime(2025, 1, 1),
-        schedule="@daily",
-        catchup=False,
-    ) as dag:
-        extract = PythonOperator(task_id="extract_market_data", python_callable=_extract)
-        transform = PythonOperator(task_id="transform_market_data", python_callable=_transform)
-        load = PythonOperator(task_id="load_market_data", python_callable=_load)
-        extract >> transform >> load
+with DAG(
+    dag_id="market_insights_daily",
+    start_date=datetime(2026, 1, 1),
+    schedule="@daily",
+    catchup=False,
+) as dag:
+    t1 = PythonOperator(task_id="extract_prices", python_callable=extract_prices)
+    t2 = PythonOperator(task_id="refresh_rag", python_callable=refresh_rag)
+    t1 >> t2

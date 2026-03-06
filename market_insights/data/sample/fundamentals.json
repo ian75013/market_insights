@@ -1,0 +1,20 @@
+{
+  "AAPL": {
+    "revenue_growth": 0.08,
+    "eps_growth": 0.1,
+    "debt_to_equity": 1.45,
+    "pe": 29.5
+  },
+  "MSFT": {
+    "revenue_growth": 0.12,
+    "eps_growth": 0.15,
+    "debt_to_equity": 0.72,
+    "pe": 34.1
+  },
+  "NVDA": {
+    "revenue_growth": 0.28,
+    "eps_growth": 0.35,
+    "debt_to_equity": 0.38,
+    "pe": 48.7
+  }
+}

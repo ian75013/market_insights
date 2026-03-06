@@ -13,10 +13,17 @@ def test_health():
 
 
 def test_etl_then_insight():
-    etl = client.post("/etl/run", params={"ticker": "AAPL"})
+    etl = client.post("/etl/run", params={"ticker": "AAPL", "provider": "sample"})
     assert etl.status_code == 200
     response = client.get("/insights/AAPL")
     assert response.status_code == 200
     body = response.json()
     assert body["ticker"] == "AAPL"
     assert "analysis" in body
+    assert len(body["sources"]) >= 1
+
+
+def test_sources_endpoint():
+    response = client.get("/sources")
+    assert response.status_code == 200
+    assert "ibkr" in response.json()["price_providers"]

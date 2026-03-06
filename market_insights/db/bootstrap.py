@@ -1,5 +1,5 @@
-from market_insights.db.models import InsightReport, PriceBar  # noqa: F401
-from market_insights.db.session import Base, engine
+from market_insights.db.models import Base
+from market_insights.db.session import engine
 
 
 def init_db() -> None:

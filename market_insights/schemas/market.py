@@ -1,15 +1,6 @@
-from datetime import date
+from __future__ import annotations
+
 from pydantic import BaseModel
-
-
-class PriceBarSchema(BaseModel):
-    ticker: str
-    date: date
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
 
 
 class FairValueResponse(BaseModel):
@@ -28,4 +19,5 @@ class InsightResponse(BaseModel):
     fair_value: float
     analysis: str
     technicals: dict
-    rag_context: list[str]
+    fundamentals: dict
+    sources: list[dict]

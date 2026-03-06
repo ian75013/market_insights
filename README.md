@@ -1,50 +1,71 @@
-# Market Insights
+# Market Insights — repo prêt pour entretien
 
-Projet démonstratif prêt à montrer en entretien pour une plateforme **Market Insights** orientée AI / Data / Backend.
+Projet démonstratif **AI / Data / Backend** pour une plateforme de recherche actions.
 
-## Fonctionnalités
+Cette version ajoute deux blocs majeurs :
+- **connecteurs IBKR / TWS / IB Gateway** avec fallback local pour la démo
+- **connecteurs vers des données libres de droits ou librement accessibles** (prix, macro, filings, news RSS)
+- **RAG plus crédible** avec documents versionnés, chunking, retrieval hybride simple, citations
 
-- Ingestion de données de marché via sources libres et broker IB (adaptateur prévu)
-- Pipeline ETL orchestrable avec Airflow
-- Nettoyage, normalisation et enrichissement de séries temporelles
-- Calcul d'indicateurs techniques
-- Modèle maison de juste valeur (baseline explicable)
-- RAG sur documents financiers / notes / actualités
-- Génération de fiches d'analyse via LLM
-- API FastAPI
-- Tests unitaires et d'intégration légers
-- Docker Compose pour exécution locale
+## Cas d'usage couverts
+
+1. **Analyse pré-calculée ou à la demande d'une action**
+   - ingestion des prix et métadonnées
+   - calcul de features techniques
+   - récupération de contexte documentaire
+   - génération d'une fiche d'analyse LLM/RAG sourcée
+
+2. **Modèle maison de juste valeur**
+   - baseline explicable et démontrable
+   - score de sous/sur-évaluation
+   - possibilité de remplacer par XGBoost/LightGBM ensuite
 
 ## Architecture
 
 ```text
 market_insights/
-  api/                 # endpoints FastAPI
-  core/                # configuration, logging
-  db/                  # modèles SQLAlchemy, session
-  etl/                 # extract / transform / load + DAG Airflow
-  llm/                 # prompts et génération de rapport
-  ml/                  # modèle de juste valeur
-  rag/                 # vectorisation et retrieval simplifiés
-  schemas/             # schémas Pydantic
-  services/            # orchestration métier
-  tests/               # tests pytest
-  data/sample/         # données de démonstration
-  scripts/             # scripts CLI
+  api/                    # FastAPI
+  connectors/
+    ibkr/                 # IB Gateway / TWS
+    open_data/            # Yahoo/Stooq/FRED/SEC/RSS (fallback local inclus)
+  db/                     # SQLAlchemy
+  etl/                    # extract / transform / load
+  llm/                    # génération de fiche
+  ml/                     # modèle de juste valeur
+  rag/                    # docs, chunking, retrieval, citations
+  schemas/                # Pydantic
+  services/               # orchestration métier
+  scripts/                # seed/demo
+  tests/                  # tests pytest
 ```
 
-## Démarrage rapide
+## Sources de données prévues
+
+### Broker
+- **IBKR** via `ib_insync` si disponible et si TWS / IB Gateway tourne localement
+- fallback automatique vers données d'exemple pour la démo entretien
+
+### Données libres / librement accessibles
+- **Stooq**: prix EOD (CSV)
+- **FRED**: séries macro
+- **SEC EDGAR**: filings / facts / company submissions
+- **RSS**: flux d'actualités financières
+- **sample local**: pour démonstration sans réseau
+
+> Les connecteurs HTTP sont écrits de façon à pouvoir être branchés réellement, tout en gardant une démo locale stable.
+
+## Démarrage local
 
 ```bash
 cp .env.example .env
 python -m venv .venv
-source .venv/bin/activate  # sous Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
+python -m market_insights.scripts.seed_demo_data
 uvicorn market_insights.api.main:app --reload
 ```
 
-API docs:
-
+Swagger:
 - `http://127.0.0.1:8000/docs`
 
 ## Docker
@@ -53,43 +74,53 @@ API docs:
 docker compose up --build
 ```
 
-## Endpoints principaux
+## Endpoints utiles
 
 - `GET /health`
-- `GET /tickers`
-- `POST /etl/run?ticker=AAPL`
-- `GET /insights/AAPL`
+- `GET /sources`
+- `POST /etl/run?ticker=AAPL&provider=sample`
+- `POST /etl/run?ticker=AAPL&provider=ibkr`
 - `GET /fair-value/AAPL`
+- `GET /insights/AAPL`
+- `GET /rag/sources/AAPL`
 
-## Airflow
+## Variables d'environnement utiles
 
-Le DAG d'exemple est dans `market_insights/etl/dags/market_insights_dag.py`.
+```env
+OPENAI_API_KEY=
+LLM_BACKEND=fallback
+IB_HOST=127.0.0.1
+IB_PORT=7497
+IB_CLIENT_ID=1
+USE_NETWORK=false
+DEFAULT_PRICE_PROVIDER=sample
+```
 
-## Juste valeur
+## Comment présenter ce repo en entretien
 
-Le modèle inclus est une baseline explicable:
+### 1. Data ingestion
+- expliquer qu'on sépare `broker data` et `open data connectors`
+- montrer que le fallback sample permet une démo stable
+- expliquer que le passage en prod consiste surtout à activer `USE_NETWORK=true`
 
-- facteur momentum
-- facteur value
-- facteur volatilité
-- facteur croissance
+### 2. ETL
+- bronze: extraction brute
+- silver: nettoyage
+- gold: features techniques + agrégats utilisables par l'API et le modèle
 
-Il peut ensuite être remplacé par:
+### 3. RAG
+- documents versionnés, chunking, citations
+- retrieval hybride léger: score lexical + similarité sur termes
+- génération d'une fiche avec sources renvoyées au front
 
-- XGBoost Regressor
-- TFT / LSTM
-- modèle multifactoriel cross-sectional
+### 4. Modèle de juste valeur
+- baseline explicable aujourd'hui
+- extension future vers modèle multifactoriel / gradient boosting
 
-## Limites du repo de démonstration
+## Prochaines évolutions réalistes
 
-- l'adaptateur IB ne déclenche pas d'appel réel par défaut
-- la couche RAG est volontairement locale et simple pour rester démontrable
-- la génération LLM peut fonctionner avec un fallback déterministe si aucune clé n'est fournie
-
-## Idées pour la démo entretien
-
-1. lancer l'API
-2. exécuter `POST /etl/run?ticker=AAPL`
-3. appeler `GET /insights/AAPL`
-4. expliquer la chaîne: extraction -> features -> juste valeur -> RAG -> rédaction
-
+- brancher réellement `ib_insync`
+- stocker embeddings dans **pgvector**
+- reranker cross-encoder
+- nightly DAG Airflow pour recalculs et indexation
+- scoring sectoriel / peer group
