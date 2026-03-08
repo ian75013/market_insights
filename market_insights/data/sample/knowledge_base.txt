@@ -1,0 +1,6 @@
+GENERAL: Les fiches Market Insights combinent signaux techniques, contexte documentaire et estimation de juste valeur.
+GENERAL: Le score global aide à prioriser les titres, mais ne remplace pas une décision d'investissement.
+AAPL: La croissance des services améliore la résilience du modèle économique.
+AAPL: La capacité à maintenir les marges reste un facteur clef pour la juste valeur.
+MSFT: L'écosystème cloud et IA soutient la trajectoire long terme.
+NVDA: La demande liée à l'IA peut soutenir une prime de valorisation élevée.

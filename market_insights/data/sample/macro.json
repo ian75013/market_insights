@@ -1,0 +1,11 @@
+{
+  "rates": {
+    "fed_funds": 4.5
+  },
+  "inflation": {
+    "cpi_yoy": 2.8
+  },
+  "growth": {
+    "gdp_nowcast": 2.1
+  }
+}
