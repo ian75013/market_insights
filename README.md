@@ -1,6 +1,6 @@
 # Market Insights
 
-Projet démonstratif **AI / Data / Backend** pour une plateforme de recherche actions.
+Projet **AI / Data / Backend** pour une plateforme de recherche actions.
 
 Cette version ajoute deux blocs majeurs :
 - **connecteurs IBKR / TWS / IB Gateway** avec fallback local pour la démo
