@@ -5,8 +5,12 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from market_insights.analysis.feature_engineering import compute_market_context
+from market_insights.analysis.signal_detection import detect_signals
+from market_insights.analysis.target_engine import compute_price_levels
+from market_insights.analysis.technical_scoring import build_summary
 from market_insights.connectors.open_data.fundamentals import SampleFundamentalsConnector
-from market_insights.db.models import Document, PriceBar
+from market_insights.db.models import PriceBar
 from market_insights.etl.transformers.features import compute_features
 from market_insights.llm.report_generator import generate_report
 from market_insights.ml.fair_value import BaselineFairValueModel
@@ -19,21 +23,25 @@ class MarketInsightService:
         self.fundamentals = SampleFundamentalsConnector()
 
     def _load_df(self, db: Session, ticker: str) -> pd.DataFrame:
-        rows = db.execute(select(PriceBar).where(PriceBar.ticker == ticker.upper()).order_by(PriceBar.date.asc())).scalars().all()
+        rows = db.execute(
+            select(PriceBar).where(PriceBar.ticker == ticker.upper()).order_by(PriceBar.date.asc())
+        ).scalars().all()
         if not rows:
             raise ValueError(f"No price data found for ticker={ticker}")
-        return pd.DataFrame([
-            {
-                "ticker": r.ticker,
-                "date": pd.to_datetime(r.date),
-                "open": r.open,
-                "high": r.high,
-                "low": r.low,
-                "close": r.close,
-                "volume": r.volume,
-            }
-            for r in rows
-        ])
+        return pd.DataFrame(
+            [
+                {
+                    "ticker": r.ticker,
+                    "date": pd.to_datetime(r.date),
+                    "open": r.open,
+                    "high": r.high,
+                    "low": r.low,
+                    "close": r.close,
+                    "volume": r.volume,
+                }
+                for r in rows
+            ]
+        )
 
     def compute_fair_value(self, db: Session, ticker: str) -> dict:
         fundamentals = self.fundamentals.fetch(ticker)
@@ -58,7 +66,9 @@ class MarketInsightService:
         ticker = ticker.upper()
         df = compute_features(self._load_df(db, ticker))
         fair = self.compute_fair_value(db, ticker)
-        technicals = df.iloc[-1][["rsi_14", "volatility_20", "trend_signal", "momentum_20", "drawdown"]].to_dict()
+        technicals = df.iloc[-1][
+            ["rsi_14", "volatility_20", "trend_signal", "momentum_20", "drawdown", "sma_20", "sma_50", "sma_200"]
+        ].to_dict()
         fundamentals = self.fundamentals.fetch(ticker)
         rag_context = self.get_rag_sources(db, ticker)
 
@@ -78,6 +88,18 @@ class MarketInsightService:
             2,
         )
 
+        market_context = compute_market_context(df)
+        signals = detect_signals(df)
+        levels = compute_price_levels(df)
+        summary = build_summary(
+            technicals=technicals,
+            fair_value=fair["fair_value"],
+            current_price=fair["current_price"],
+            levels=levels,
+            signals=signals,
+            score=score,
+        )
+
         analysis = generate_report(
             ticker=ticker,
             current_price=fair["current_price"],
@@ -86,14 +108,40 @@ class MarketInsightService:
             technicals=technicals,
             rag_context=rag_context,
             fundamentals=fundamentals,
+            summary=summary,
+            levels=levels,
+            signals=signals,
+            market_context=market_context,
         )
+        generated_at = datetime.now(UTC).isoformat()
+        technical_payload = {k: round(float(v), 4) for k, v in technicals.items()}
+        comparable = {
+            "ticker": ticker,
+            "timeframe": "1D",
+            "generated_at": generated_at,
+            "summary": summary,
+            "quotes": market_context,
+            "technical": technical_payload,
+            "levels": levels,
+            "signals": signals,
+            "fundamental_rag": {
+                "summary": (
+                    f"Croissance CA {fundamentals.get('revenue_growth', 'n/a')}, "
+                    f"EPS {fundamentals.get('eps_growth', 'n/a')}, dette {fundamentals.get('debt_to_equity', 'n/a')}"
+                ),
+                "sources": rag_context,
+            },
+            "narrative": analysis,
+            "disclaimer": "Contenu informatif et analytique, non personnalisé, ne constituant pas un conseil en investissement.",
+        }
         return {
             "ticker": ticker,
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": generated_at,
             "score": score,
             "fair_value": fair["fair_value"],
             "analysis": analysis,
-            "technicals": {k: round(float(v), 4) for k, v in technicals.items()},
+            "technicals": technical_payload,
             "fundamentals": fundamentals,
             "sources": rag_context,
+            "comparable": comparable,
         }

@@ -82,6 +82,7 @@ docker compose up --build
 - `POST /etl/run?ticker=AAPL&provider=ibkr`
 - `GET /fair-value/AAPL`
 - `GET /insights/AAPL`
+- `GET /insights/AAPL/comparable`  # format comparable à une fiche d’analyse technique structurée
 - `GET /rag/sources/AAPL`
 
 ## Variables d'environnement utiles
@@ -129,3 +130,23 @@ DEFAULT_PRICE_PROVIDER=sample
 ## Demo mode
 
 No external market data account is required for the interview demo. Use `provider=sample` or keep `USE_NETWORK=false` to run the full flow offline with bundled sample data.
+
+
+## Générateur d'analyses comparable
+
+Cette version ajoute un moteur déterministe qui produit une fiche structurée inspirée des analyses techniques publiées sur des sites spécialisés, sans recopier leur contenu :
+
+- résumé d'analyse
+- opinion conditionnelle
+- objectifs de prix
+- cotations
+- technique
+- niveaux support / résistance
+- signaux détectés
+- enrichissement RAG
+- disclaimer
+
+Principe de conception :
+- les chiffres sont calculés par le moteur Python
+- le LLM ne fait que rédiger
+- le RAG enrichit le contexte mais ne décide pas des niveaux

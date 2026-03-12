@@ -12,6 +12,20 @@ class FairValueResponse(BaseModel):
     factors: dict
 
 
+class ComparableInsightResponse(BaseModel):
+    ticker: str
+    timeframe: str
+    generated_at: str
+    summary: dict
+    quotes: dict
+    technical: dict
+    levels: dict
+    signals: dict
+    fundamental_rag: dict
+    narrative: str
+    disclaimer: str
+
+
 class InsightResponse(BaseModel):
     ticker: str
     generated_at: str
@@ -21,3 +35,4 @@ class InsightResponse(BaseModel):
     technicals: dict
     fundamentals: dict
     sources: list[dict]
+    comparable: ComparableInsightResponse | None = None

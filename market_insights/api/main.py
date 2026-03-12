@@ -3,19 +3,19 @@ from sqlalchemy.orm import Session
 
 from market_insights.db.bootstrap import init_db
 from market_insights.db.session import get_db
-from market_insights.schemas.market import FairValueResponse, InsightResponse
+from market_insights.schemas.market import ComparableInsightResponse, FairValueResponse, InsightResponse
 from market_insights.services.etl_service import run_etl
 from market_insights.services.market_service import MarketInsightService
 
 
 init_db()
-app = FastAPI(title="Market Insights API", version="2.0.0")
+app = FastAPI(title="Market Insights API", version="2.1.0")
 service = MarketInsightService()
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "2.1.0"}
 
 
 @app.get("/sources")
@@ -50,6 +50,14 @@ def fair_value(ticker: str, db: Session = Depends(get_db)):
 def insight(ticker: str, db: Session = Depends(get_db)):
     try:
         return service.generate_insight(db, ticker)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/insights/{ticker}/comparable", response_model=ComparableInsightResponse)
+def comparable_insight(ticker: str, db: Session = Depends(get_db)):
+    try:
+        return service.generate_insight(db, ticker)["comparable"]
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
