@@ -1,4 +1,4 @@
-# Market Insights — repo prêt pour entretien
+# Market Insights
 
 Projet démonstratif **AI / Data / Backend** pour une plateforme de recherche actions.
 
