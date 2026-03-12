@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from market_insights.db.bootstrap import init_db
@@ -6,11 +7,20 @@ from market_insights.db.session import get_db
 from market_insights.schemas.market import ComparableInsightResponse, FairValueResponse, InsightResponse
 from market_insights.services.etl_service import run_etl
 from market_insights.services.market_service import MarketInsightService
+from market_insights.services.hybrid_insight_service import HybridInsightService
 
 
 init_db()
 app = FastAPI(title="Market Insights API", version="2.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 service = MarketInsightService()
+hybrid_service = HybridInsightService()
 
 
 @app.get("/health")
@@ -65,3 +75,11 @@ def comparable_insight(ticker: str, db: Session = Depends(get_db)):
 @app.get("/rag/sources/{ticker}")
 def rag_sources(ticker: str, db: Session = Depends(get_db)):
     return {"ticker": ticker.upper(), "sources": service.get_rag_sources(db, ticker)}
+
+
+@app.get("/insights/{ticker}/hybrid")
+def hybrid_insight(ticker: str, db: Session = Depends(get_db)):
+    try:
+        return hybrid_service.generate_hybrid_insight(db, ticker)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
