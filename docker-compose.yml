@@ -1,10 +1,46 @@
 services:
   api:
-    build: .
-    ports:
-      - "8000:8000"
+    build:
+      context: .
+      dockerfile: Dockerfile
     env_file:
       - .env
     command: >
       sh -c "python -m market_insights.scripts.seed_demo_data &&
              uvicorn market_insights.api.main:app --host 0.0.0.0 --port 8000"
+    expose:
+      - "8000"
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  frontend:
+    build:
+      context: ./market_insights/frontend-react
+      dockerfile: Dockerfile
+    expose:
+      - "80"
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - frontend
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/ssl:/etc/nginx/ssl:ro
+      - ./deploy/nginx/certbot-webroot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    restart: unless-stopped
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    driver: bridge
