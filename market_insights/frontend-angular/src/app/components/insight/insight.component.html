@@ -1,0 +1,22 @@
+<div style="padding:20px">
+
+<h2>Market Insight</h2>
+
+<input [(ngModel)]="ticker" placeholder="Ticker"/>
+<button (click)="loadInsight()">Analyse</button>
+
+<div *ngIf="insight">
+
+<h3>{{insight.ticker}}</h3>
+
+<p><b>Opinion :</b> {{insight.summary?.opinion}}</p>
+<p><b>Tendance CT :</b> {{insight.summary?.short_trend}}</p>
+<p><b>Tendance LT :</b> {{insight.summary?.long_trend}}</p>
+
+<p><b>Prix :</b> {{insight.last_price}}</p>
+
+<p>{{insight.narrative}}</p>
+
+</div>
+
+</div>

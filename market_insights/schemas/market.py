@@ -1,3 +1,5 @@
+"""Pydantic response models for the API."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -10,6 +12,21 @@ class FairValueResponse(BaseModel):
     upside_pct: float
     confidence: float
     factors: dict
+    method: str = "baseline_multifactor"
+
+
+class ComparableInsightResponse(BaseModel):
+    ticker: str
+    timeframe: str
+    generated_at: str
+    summary: dict
+    quotes: dict
+    technical: dict
+    levels: dict
+    signals: dict
+    fundamental_rag: dict
+    narrative: str
+    disclaimer: str
 
 
 class InsightResponse(BaseModel):
@@ -21,3 +38,21 @@ class InsightResponse(BaseModel):
     technicals: dict
     fundamentals: dict
     sources: list[dict]
+    comparable: ComparableInsightResponse | None = None
+
+
+class ProviderStatus(BaseModel):
+    name: str
+    available: bool
+    needs_key: bool
+    needs_network: bool
+
+
+class ETLResult(BaseModel):
+    ticker: str
+    provider: str
+    loaded_rows: int
+    feature_rows: int
+    loaded_docs: int
+    elapsed_seconds: float
+    timestamp: str

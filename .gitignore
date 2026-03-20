@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/jupyternotebooks,python,django,visualstudiocode
-# Edit at https://www.toptal.com/developers/gitignore?templates=jupyternotebooks,python,django,visualstudiocode
+# Created by https://www.toptal.com/developers/gitignore/api/python,django
+# Edit at https://www.toptal.com/developers/gitignore?templates=python,django
 
 ### Django ###
 *.log
@@ -52,12 +52,6 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
 
 # Unit test / coverage reports
 htmlcov/
@@ -177,17 +171,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-### JupyterNotebooks ###
-# gitignore template for Jupyter Notebooks
-# website: http://jupyter.org/
-
-*/.ipynb_checkpoints/*
-
-# IPython
-
-# Remove previous ipynb_checkpoints
-#   git rm -r .ipynb_checkpoints/
-
 ### Python ###
 # Byte-compiled / optimized / DLL files
 
@@ -280,23 +263,40 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
-### VisualStudioCode ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+# End of https://www.toptal.com/developers/gitignore/api/python,django
+# Created by https://www.toptal.com/developers/gitignore/api/angular
+# Edit at https://www.toptal.com/developers/gitignore?templates=angular
 
-# Local History for Visual Studio Code
-.history/
+### Angular ###
+## Angular ##
+# compiled output
+dist/
+tmp/
+app/**/*.js
+app/**/*.js.map
 
-# Built Visual Studio Code Extensions
-*.vsix
+# dependencies
+node_modules/
+bower_components/
 
-### VisualStudioCode Patch ###
-# Ignore all local history of files
-.history
-.ionide
+# IDEs and editors
+.idea/
 
-# End of https://www.toptal.com/developers/gitignore/api/jupyternotebooks,python,django,visualstudiocode
+# misc
+.sass-cache/
+connect.lock/
+coverage/
+libpeerconnection.log/
+npm-debug.log
+testem.log
+typings/
+.angular/
+
+# e2e
+e2e/*.js
+e2e/*.map
+
+# System Files
+.DS_Store/
+
+# End of https://www.toptal.com/developers/gitignore/api/angular

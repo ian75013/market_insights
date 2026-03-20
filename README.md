@@ -1,126 +1,224 @@
-# Market Insights — repo prêt pour entretien
+# Market Insights v3 — Multi-Source Financial Research Platform
 
-Projet démonstratif **AI / Data / Backend** pour une plateforme de recherche actions.
+Projet **Backend AI / Data Engineering / Quant** pour une plateforme de recherche actions et crypto.
 
-Cette version ajoute deux blocs majeurs :
-- **connecteurs IBKR / TWS / IB Gateway** avec fallback local pour la démo
-- **connecteurs vers des données libres de droits ou librement accessibles** (prix, macro, filings, news RSS)
-- **RAG plus crédible** avec documents versionnés, chunking, retrieval hybride simple, citations
+## Nouveautés v3
 
-## Cas d'usage couverts
+### Connecteurs open data réellement fonctionnels
 
-1. **Analyse pré-calculée ou à la demande d'une action**
-   - ingestion des prix et métadonnées
-   - calcul de features techniques
-   - récupération de contexte documentaire
-   - génération d'une fiche d'analyse LLM/RAG sourcée
+| Provider | Type | Clé API | Données |
+|---|---|---|---|
+| **Yahoo Finance** (yfinance) | Prix + Fondamentaux | Non | OHLCV, P/E, margins, sector, market cap, description |
+| **Alpha Vantage** | Prix + Fondamentaux + News | Oui (gratuite) | Daily adjusted, company overview, news sentiment |
+| **Financial Modeling Prep** | Fondamentaux + Ratios | Oui (gratuite) | Profile, ratios TTM, earnings calendar |
+| **FRED** | Macro | Oui (gratuite) | Fed funds, CPI, GDP, unemployment, VIX, M2, etc. |
+| **SEC EDGAR** | Filings | Non | Company facts US-GAAP (revenue, EPS, assets, equity) |
+| **CoinGecko** | Crypto | Non | OHLC, market cap, supply, descriptions |
+| **Stooq** | Prix EOD | Non | CSV daily prices |
+| **RSS** (Google News) | News | Non | Headlines + summaries |
+| **IBKR** (TWS/Gateway) | Prix live | Non (compte) | Historical bars via ib_insync |
 
-2. **Modèle maison de juste valeur**
-   - baseline explicable et démontrable
-   - score de sous/sur-évaluation
-   - possibilité de remplacer par XGBoost/LightGBM ensuite
+### Architecture améliorée
+
+- **Cache TTL** thread-safe avec invalidation par préfixe (évite le rate-limiting)
+- **Cascade multi-source** : chaque type de donnée a un ordre de résolution configurable
+- **Provider auto** : `provider=auto` essaie Yahoo → Stooq → Alpha Vantage → CoinGecko → Sample
+- **Batch ETL** : ingestion parallèle de plusieurs tickers
+- **10 tickers sample** enrichis (AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA, JPM, JNJ, BTC)
+- **Données macro enrichies** (taux, inflation, emploi, sentiment, housing, monnaie)
+- **33 tests** passant en CI
+
+### Nouveaux endpoints API
+
+| Endpoint | Description |
+|---|---|
+| `GET /providers` | Statut live de chaque provider (clé configurée, réseau actif) |
+| `POST /etl/batch?tickers=AAPL,MSFT,NVDA` | ETL multi-tickers en un appel |
+| `GET /fundamentals/{ticker}` | Fondamentaux multi-source |
+| `GET /news/{ticker}` | News multi-source |
+| `GET /macro` | Dashboard macro (FRED ou sample) |
+| `GET /cache/stats` | Monitoring du cache |
+| `POST /cache/clear?prefix=...` | Invalidation du cache |
 
 ## Architecture
 
 ```text
 market_insights/
-  api/                    # FastAPI
+  api/                          # FastAPI v3
   connectors/
-    ibkr/                 # IB Gateway / TWS
-    open_data/            # Yahoo/Stooq/FRED/SEC/RSS (fallback local inclus)
-  db/                     # SQLAlchemy
-  etl/                    # extract / transform / load
-  llm/                    # génération de fiche
-  ml/                     # modèle de juste valeur
-  rag/                    # docs, chunking, retrieval, citations
-  schemas/                # Pydantic
-  services/               # orchestration métier
-  scripts/                # seed/demo
-  tests/                  # tests pytest
+    ibkr/                       # IB Gateway / TWS
+    open_data/
+      alpha_vantage.py          # Prix, overview, news sentiment
+      base.py                   # HTTP client avec retry + cache
+      coingecko.py              # Crypto OHLC, info, global market
+      fmp.py                    # Profile, ratios TTM, earnings
+      fundamentals.py           # Multi-source cascade connector
+      macro.py                  # FRED API + sample
+      news.py                   # Multi-source (AV, RSS, sample)
+      prices.py                 # Sample + Stooq
+      yahoo.py                  # yfinance prices + fundamentals
+  core/
+    cache.py                    # TTL cache + decorator
+    config.py                   # Pydantic settings (env vars)
+    logging.py
+  db/                           # SQLAlchemy models + session
+  etl/                          # Extract → Clean → Features → Load
+  llm/                          # Report generation
+  ml/                           # Fair value model (baseline multifactor)
+  rag/                          # Chunking, retrieval, citations
+  schemas/                      # Pydantic response models
+  services/
+    etl_service.py              # ETL orchestration + batch
+    market_service.py           # Insight generation
+    hybrid_insight_service.py   # Fusion technique + fair value + RAG
+  scripts/                      # Seed + demo
+  tests/                        # 33 tests pytest
+  data/sample/                  # 10 tickers × 55 jours
+  frontend-angular/             # Dashboard Angular
 ```
 
-## Sources de données prévues
+## Cascade de résolution des données
 
-### Broker
-- **IBKR** via `ib_insync` si disponible et si TWS / IB Gateway tourne localement
-- fallback automatique vers données d'exemple pour la démo entretien
+### Prix
+```
+provider=auto → Yahoo Finance → Stooq → Alpha Vantage → CoinGecko → Sample
+```
 
-### Données libres / librement accessibles
-- **Stooq**: prix EOD (CSV)
-- **FRED**: séries macro
-- **SEC EDGAR**: filings / facts / company submissions
-- **RSS**: flux d'actualités financières
-- **sample local**: pour démonstration sans réseau
+### Fondamentaux
+```
+MultiFundamentalsConnector → Yahoo Finance → Alpha Vantage → FMP → SEC EDGAR → Sample
+```
 
-> Les connecteurs HTTP sont écrits de façon à pouvoir être branchés réellement, tout en gardant une démo locale stable.
+### News
+```
+MultiNewsConnector → Alpha Vantage (sentiment) → RSS (Google News) → Sample
+```
 
-## Démarrage local
+### Macro
+```
+FRED (si clé + réseau) → Sample enrichi
+```
+
+## Démarrage rapide
+
+### Mode offline (démo entretien)
 
 ```bash
 cp .env.example .env
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m market_insights.scripts.seed_demo_data
 uvicorn market_insights.api.main:app --reload
 ```
 
-Swagger:
-- `http://127.0.0.1:8000/docs`
+Swagger : http://127.0.0.1:8000/docs
 
-## Docker
+### Mode réseau (données réelles)
+
+```bash
+# Dans .env :
+USE_NETWORK=true
+DEFAULT_PRICE_PROVIDER=auto
+ALPHA_VANTAGE_API_KEY=your_key_here
+FRED_API_KEY=your_key_here
+FMP_API_KEY=your_key_here
+
+uvicorn market_insights.api.main:app --reload
+```
+
+### Docker
 
 ```bash
 docker compose up --build
 ```
 
-## Endpoints utiles
+## Tests
 
-- `GET /health`
-- `GET /sources`
-- `POST /etl/run?ticker=AAPL&provider=sample`
-- `POST /etl/run?ticker=AAPL&provider=ibkr`
-- `GET /fair-value/AAPL`
-- `GET /insights/AAPL`
-- `GET /rag/sources/AAPL`
-
-## Variables d'environnement utiles
-
-```env
-OPENAI_API_KEY=
-LLM_BACKEND=fallback
-IB_HOST=127.0.0.1
-IB_PORT=7497
-IB_CLIENT_ID=1
-USE_NETWORK=false
-DEFAULT_PRICE_PROVIDER=sample
+```bash
+pytest -v
+# 33 passed
 ```
+
+## Variables d'environnement
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `USE_NETWORK` | `false` | Active les appels HTTP vers les providers |
+| `DEFAULT_PRICE_PROVIDER` | `sample` | Provider par défaut (`sample`, `yahoo`, `auto`...) |
+| `ALPHA_VANTAGE_API_KEY` | `` | Clé gratuite Alpha Vantage |
+| `FRED_API_KEY` | `` | Clé gratuite FRED |
+| `FMP_API_KEY` | `` | Clé gratuite Financial Modeling Prep |
+| `SEC_USER_AGENT` | `MarketInsights/1.0...` | Header requis par SEC EDGAR |
+| `CACHE_TTL_PRICES` | `900` | TTL cache prix (secondes) |
+| `CACHE_TTL_FUNDAMENTALS` | `3600` | TTL cache fondamentaux |
+| `CACHE_TTL_MACRO` | `1800` | TTL cache macro |
+| `CACHE_TTL_NEWS` | `600` | TTL cache news |
+
+## Endpoints complets
+
+### Système
+- `GET /health` — statut + version + config réseau
+- `GET /sources` — liste des providers par catégorie
+- `GET /providers` — statut live de chaque provider
+- `GET /cache/stats` — métriques du cache
+- `POST /cache/clear?prefix=...` — invalidation
+
+### ETL
+- `POST /etl/run?ticker=AAPL&provider=sample` — pipeline single
+- `POST /etl/batch?tickers=AAPL,MSFT,NVDA&provider=auto` — pipeline batch
+
+### Analyse
+- `GET /fair-value/{ticker}` — juste valeur + facteurs
+- `GET /insights/{ticker}` — analyse complète
+- `GET /insights/{ticker}/comparable` — fiche technique structurée
+- `GET /insights/{ticker}/hybrid` — fusion technique + fair value + RAG
+
+### Données
+- `GET /fundamentals/{ticker}` — fondamentaux multi-source
+- `GET /news/{ticker}?limit=10` — news multi-source
+- `GET /macro` — dashboard macro
+- `GET /rag/sources/{ticker}` — sources documentaires RAG
 
 ## Comment présenter ce repo en entretien
 
-### 1. Data ingestion
-- expliquer qu'on sépare `broker data` et `open data connectors`
-- montrer que le fallback sample permet une démo stable
-- expliquer que le passage en prod consiste surtout à activer `USE_NETWORK=true`
+### 1. Data Engineering
+- Montrer les connecteurs multi-source avec cascade et fallback
+- Expliquer le cache TTL pour respecter les rate limits
+- Pipeline ETL bronze → silver → gold avec batch support
 
-### 2. ETL
-- bronze: extraction brute
-- silver: nettoyage
-- gold: features techniques + agrégats utilisables par l'API et le modèle
+### 2. Backend Architecture
+- FastAPI avec dependency injection (SQLAlchemy sessions)
+- Configuration par variables d'environnement (12-factor)
+- Séparation nette : connectors / services / API / schemas
 
-### 3. RAG
-- documents versionnés, chunking, citations
-- retrieval hybride léger: score lexical + similarité sur termes
-- génération d'une fiche avec sources renvoyées au front
+### 3. Open Data Integration
+- 9 providers réels intégrés (pas juste des stubs)
+- Résolution automatique par priorité
+- Chaque provider est testable individuellement
 
-### 4. Modèle de juste valeur
-- baseline explicable aujourd'hui
-- extension future vers modèle multifactoriel / gradient boosting
+### 4. AI / RAG
+- Documents versionnés, chunking, retrieval lexical hybride
+- Citations traçables dans les analyses
+- LLM en mode fallback déterministe (pas de dépendance OpenAI)
 
-## Prochaines évolutions réalistes
+### 5. Modèle quantitatif
+- Fair value baseline multifactorielle (momentum, volatilité, fondamentaux)
+- Score de confiance calibré
+- Extensible vers XGBoost / LightGBM
 
-- brancher réellement `ib_insync`
-- stocker embeddings dans **pgvector**
-- reranker cross-encoder
-- nightly DAG Airflow pour recalculs et indexation
-- scoring sectoriel / peer group
+### 6. Qualité
+- 33 tests automatisés
+- CI GitHub Actions
+- Type hints complets
+- Logging structuré
+
+## Évolutions réalistes
+
+- [ ] pgvector pour embeddings RAG
+- [ ] Reranker cross-encoder (sentence-transformers)
+- [ ] DAG Airflow pour recalculs nightly
+- [ ] Scoring sectoriel / peer group
+- [ ] Export PDF des fiches d'analyse
+- [ ] Chart frontend Lightweight Charts / TradingView
+- [ ] WebSocket pour prix live
+- [ ] Rate limiter par provider avec circuit breaker

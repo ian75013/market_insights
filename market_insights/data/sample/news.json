@@ -11,6 +11,18 @@
       "link": "",
       "published_at": "2026-02-22",
       "content": "Operational efficiency may help preserve cash generation despite hardware cycles."
+    },
+    {
+      "title": "Apple Vision Pro 2 announcement expected at WWDC 2026",
+      "link": "",
+      "published_at": "2026-03-10",
+      "content": "Spatial computing strategy could unlock new revenue streams for the ecosystem."
+    },
+    {
+      "title": "Weaker iPhone upgrade cycle raises short-term concerns",
+      "link": "",
+      "published_at": "2026-02-18",
+      "content": "Analysts note that hardware replacement cycles may be elongating."
     }
   ],
   "MSFT": [
@@ -19,6 +31,18 @@
       "link": "",
       "published_at": "2026-03-02",
       "content": "Azure and AI monetization remain major catalysts for long-term growth."
+    },
+    {
+      "title": "Microsoft 365 seat growth accelerates in enterprise segment",
+      "link": "",
+      "published_at": "2026-02-25",
+      "content": "Enterprise software demand continues to drive recurring revenue."
+    },
+    {
+      "title": "Gaming revenue declines weigh on overall growth mix",
+      "link": "",
+      "published_at": "2026-02-15",
+      "content": "Xbox and gaming segment faces competitive headwinds."
     }
   ],
   "NVDA": [
@@ -27,6 +51,116 @@
       "link": "",
       "published_at": "2026-03-03",
       "content": "GPU demand and datacenter spend continue to influence premium valuation."
+    },
+    {
+      "title": "Blackwell architecture driving record datacenter revenue",
+      "link": "",
+      "published_at": "2026-03-08",
+      "content": "Next-generation GPU architecture exceeds supply expectations."
+    },
+    {
+      "title": "Nvidia faces regulatory scrutiny over export controls",
+      "link": "",
+      "published_at": "2026-02-20",
+      "content": "Geopolitical risk remains a key downside factor for chip exports."
+    }
+  ],
+  "GOOGL": [
+    {
+      "title": "Google AI Overviews drives search revenue monetization",
+      "link": "",
+      "published_at": "2026-03-05",
+      "content": "AI integration in search boosting ad revenue per query."
+    },
+    {
+      "title": "Antitrust ruling uncertainty clouds Alphabet outlook",
+      "link": "",
+      "published_at": "2026-02-28",
+      "content": "Ongoing DOJ proceedings create regulatory overhang."
+    }
+  ],
+  "AMZN": [
+    {
+      "title": "AWS revenue growth reaccelerates to 18%",
+      "link": "",
+      "published_at": "2026-03-04",
+      "content": "Cloud infrastructure demand continues to be the primary margin contributor."
+    },
+    {
+      "title": "Amazon logistics cost optimization boosts e-commerce margins",
+      "link": "",
+      "published_at": "2026-02-26",
+      "content": "Regionalized fulfillment network showing measurable cost savings."
+    }
+  ],
+  "META": [
+    {
+      "title": "Meta AI assistant rollout accelerates engagement metrics",
+      "link": "",
+      "published_at": "2026-03-06",
+      "content": "AI features driving time-on-platform across Instagram and WhatsApp."
+    },
+    {
+      "title": "Reality Labs losses narrow slightly in Q4",
+      "link": "",
+      "published_at": "2026-02-20",
+      "content": "Metaverse investment pace moderating while core business strengthens."
+    }
+  ],
+  "TSLA": [
+    {
+      "title": "Tesla delivery numbers miss consensus estimates",
+      "link": "",
+      "published_at": "2026-03-07",
+      "content": "Intensifying EV competition and price cuts weigh on unit economics."
+    },
+    {
+      "title": "Full Self-Driving v13 receives positive safety reviews",
+      "link": "",
+      "published_at": "2026-03-01",
+      "content": "Autonomous driving progress could reshape long-term valuation framework."
+    }
+  ],
+  "JPM": [
+    {
+      "title": "JPMorgan net interest income beats on resilient loan demand",
+      "link": "",
+      "published_at": "2026-03-02",
+      "content": "Interest rate environment continues to support banking sector margins."
+    },
+    {
+      "title": "Credit quality metrics stable despite macro uncertainty",
+      "link": "",
+      "published_at": "2026-02-18",
+      "content": "Provisions remain controlled suggesting healthy consumer balance sheets."
+    }
+  ],
+  "JNJ": [
+    {
+      "title": "J&J oncology pipeline advances with positive Phase III data",
+      "link": "",
+      "published_at": "2026-03-03",
+      "content": "Drug development progress supports long-term growth outlook."
+    },
+    {
+      "title": "Litigation overhang persists on legacy talc exposure",
+      "link": "",
+      "published_at": "2026-02-22",
+      "content": "Legal risk remains a material uncertainty for the stock."
+    }
+  ],
+  "BTC": [
+    {
+      "title": "Bitcoin ETF inflows reach new monthly record",
+      "link": "",
+      "published_at": "2026-03-05",
+      "content": "Institutional adoption via spot ETFs continues to accelerate."
+    },
+    {
+      "title": "Regulatory clarity improving in EU and US frameworks",
+      "link": "",
+      "published_at": "2026-02-28",
+      "content": "Clearer regulatory environment may reduce risk premium."
     }
   ]
 }

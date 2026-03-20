@@ -1,16 +1,41 @@
 from __future__ import annotations
 
 
-def generate_report(*, ticker: str, current_price: float, fair_value: float, score: float, technicals: dict, rag_context: list[dict], fundamentals: dict) -> str:
-    direction = "haussier" if fair_value >= current_price else "prudent"
+def generate_report(
+    *,
+    ticker: str,
+    current_price: float,
+    fair_value: float,
+    score: float,
+    technicals: dict,
+    rag_context: list[dict],
+    fundamentals: dict,
+    summary: dict | None = None,
+    levels: dict | None = None,
+    signals: dict | None = None,
+    market_context: dict | None = None,
+) -> str:
+    summary = summary or {}
+    levels = levels or {}
+    signals = signals or {"patterns": [], "candles": [], "flags": {}}
+    market_context = market_context or {}
+
     sources = "; ".join(f"{c['document_type']}:{c['title']}" for c in rag_context[:3]) or "aucune source"
+    patterns = ", ".join(signals.get("patterns", [])[:3]) or "aucun pattern majeur"
+    candles = ", ".join(signals.get("candles", [])[:2]) or "aucun chandelier décisif"
+
     return (
-        f"Fiche {ticker} — Vue synthétique. "
-        f"Le titre présente un biais {direction} avec un score global de {score:.2f}. "
-        f"Prix actuel: {current_price:.2f}. Juste valeur baseline: {fair_value:.2f}. "
-        f"RSI14={technicals['rsi_14']:.2f}, volatilité20={technicals['volatility_20']:.4f}, "
-        f"momentum20={technicals['momentum_20']:.4f}, trend_signal={int(technicals['trend_signal'])}. "
-        f"Fondamentaux maison: revenue_growth={fundamentals.get('revenue_growth', 'n/a')}, "
-        f"eps_growth={fundamentals.get('eps_growth', 'n/a')}, debt_to_equity={fundamentals.get('debt_to_equity', 'n/a')}. "
-        f"Contexte RAG utilisé: {sources}."
+        f"Résumé d'analyse — {ticker}. "
+        f"Tendance court terme {summary.get('trend_short', 'neutre')}, tendance de fond {summary.get('trend_long', 'neutre')}. "
+        f"Opinion: {summary.get('opinion', 'neutre')}. "
+        f"Cours {current_price:.2f}, juste valeur baseline {fair_value:.2f}, score global {score:.2f}. "
+        f"Objectif 1 {levels.get('target_1', current_price):.2f} puis objectif 2 {levels.get('target_2', current_price):.2f}. "
+        f"Support pivot {levels.get('support', current_price):.2f}, résistance immédiate {levels.get('resistance', current_price):.2f}. "
+        f"Le momentum sur 20 périodes ressort à {technicals.get('momentum_20', 0.0):.4f}, le RSI 14 à {technicals.get('rsi_14', 50.0):.2f} et la volatilité 20 à {technicals.get('volatility_20', 0.0):.4f}. "
+        f"Les signaux saillants sont: {patterns}; chandeliers détectés: {candles}. "
+        f"Sur le plan fondamental, la croissance du chiffre d'affaires est de {fundamentals.get('revenue_growth', 'n/a')}, "
+        f"la croissance EPS de {fundamentals.get('eps_growth', 'n/a')} et le debt-to-equity de {fundamentals.get('debt_to_equity', 'n/a')}. "
+        f"Le mouvement du jour est de {market_context.get('day_change_pct', 0.0):.2f}% avec un ratio de volume de {market_context.get('volume_ratio', 1.0):.2f}. "
+        f"Contexte documentaire utilisé: {sources}. "
+        f"Avertissement: contenu analytique non personnalisé, ne constituant pas un conseil en investissement."
     )
