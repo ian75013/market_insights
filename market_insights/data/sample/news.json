@@ -11,6 +11,7 @@
       "link": "",
       "published_at": "2026-02-22",
       "content": "Operational efficiency may help preserve cash generation despite hardware cycles."
+<<<<<<< HEAD
     },
     {
       "title": "Apple Vision Pro 2 announcement expected at WWDC 2026",
@@ -23,6 +24,8 @@
       "link": "",
       "published_at": "2026-02-18",
       "content": "Analysts note that hardware replacement cycles may be elongating."
+=======
+>>>>>>> origin/main
     }
   ],
   "MSFT": [
@@ -31,6 +34,7 @@
       "link": "",
       "published_at": "2026-03-02",
       "content": "Azure and AI monetization remain major catalysts for long-term growth."
+<<<<<<< HEAD
     },
     {
       "title": "Microsoft 365 seat growth accelerates in enterprise segment",
@@ -43,6 +47,8 @@
       "link": "",
       "published_at": "2026-02-15",
       "content": "Xbox and gaming segment faces competitive headwinds."
+=======
+>>>>>>> origin/main
     }
   ],
   "NVDA": [
@@ -51,6 +57,7 @@
       "link": "",
       "published_at": "2026-03-03",
       "content": "GPU demand and datacenter spend continue to influence premium valuation."
+<<<<<<< HEAD
     },
     {
       "title": "Blackwell architecture driving record datacenter revenue",
@@ -161,6 +168,8 @@
       "link": "",
       "published_at": "2026-02-28",
       "content": "Clearer regulatory environment may reduce risk premium."
+=======
+>>>>>>> origin/main
     }
   ]
 }
