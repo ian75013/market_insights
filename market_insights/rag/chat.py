@@ -62,6 +62,8 @@ def _fmt_sources(sources):
             "title": s.get("title", ""),
             "document_type": s.get("document_type", ""),
             "score": s.get("score", 0),
+            "url": s.get("url", ""),
+            "preview": _clean(s.get("content", ""))[:150],
         }
         for s in sources
     ]

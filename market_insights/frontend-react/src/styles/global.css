@@ -167,3 +167,8 @@ body{background:var(--bg);color:var(--text);font-family:"DM Sans","Instrument Sa
 .empty-state{text-align:center;padding:48px 20px;color:var(--muted)}
 .skeleton{background:linear-gradient(90deg,var(--panel2) 25%,var(--border) 50%,var(--panel2) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:7px}
 .loading-pulse{animation:pulse 1.3s infinite;color:var(--amber)}
+
+/* ── Source links ────────────────────────────── */
+.source-item a { transition: opacity .15s; }
+.source-item a:hover { opacity: .75; }
+.bubble-sources .source-item { margin-bottom: 6px; }

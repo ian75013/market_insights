@@ -181,22 +181,44 @@ export function RagChatTab({ ticker }) {
 function Bubble({ msg }) {
   const cls = msg.role === "user" ? "bubble-user" : msg.role === "error" ? "bubble-error" : msg.role === "system" ? "bubble-system" : "bubble-assistant";
   const labels = { user:"Vous", assistant:"Assistant", error:"Erreur", system:"Système" };
+
+  /* Render text with [Source: X] highlighted */
+  const renderText = (text) => {
+    if (!text) return null;
+    const parts = text.split(/(\[(?:Source\s*:\s*)?[^\]]+\])/g);
+    return parts.map((p, i) => {
+      if (/^\[/.test(p)) {
+        return <span key={i} className="tag tag-accent" style={{ cursor: "default", margin: "0 2px" }}>{p}</span>;
+      }
+      return <span key={i}>{p}</span>;
+    });
+  };
+
   return (
     <div className={`bubble ${cls}`}>
       <div className="bubble-role">
         <span>{labels[msg.role] || msg.role}</span>
         {msg.llm?.provider && <Tag variant="accent">{msg.llm.provider}</Tag>}
       </div>
-      <div className="text-base lh-relaxed">{msg.content}</div>
+      <div className="text-base lh-relaxed">{renderText(msg.content)}</div>
       {msg.sources?.length > 0 && (
         <div className="bubble-sources">
-          <div className="text-xs muted" style={{ marginBottom:4 }}>Sources:</div>
-          {msg.sources.map((s,i) => (
-            <div key={i} className="flex-row gap-xs text-xs">
-              <span className="text-accent fw-600">[{i+1}]</span>
-              <span className="muted">{s.title}</span>
-              <Tag variant="muted">{s.document_type}</Tag>
-              <span className="mono text-accent">{s.score}</span>
+          <div className="text-xs muted" style={{ marginBottom: 6 }}>Sources utilisées :</div>
+          {msg.sources.map((s, i) => (
+            <div key={i} className="source-item" style={{ marginBottom: 6 }}>
+              <div className="flex-row gap-xs">
+                <span className="text-accent fw-700">[{i + 1}]</span>
+                {s.url ? (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-accent fw-600" style={{ textDecoration: "none" }}>
+                    {s.title || "Source"} ↗
+                  </a>
+                ) : (
+                  <span className="fw-600">{s.title || "Source"}</span>
+                )}
+                <Tag variant="muted">{s.document_type}</Tag>
+                <span className="mono text-xs text-accent">{s.score}</span>
+              </div>
+              {s.preview && <div className="text-xs muted" style={{ marginTop: 3 }}>{s.preview}</div>}
             </div>
           ))}
         </div>
@@ -204,3 +226,4 @@ function Bubble({ msg }) {
     </div>
   );
 }
+
