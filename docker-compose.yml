@@ -1,32 +1,30 @@
 services:
 
-  # ── PostgreSQL ─────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: mi-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: market_insights
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      POSTGRES_DB: market_insights
+      POSTGRES_USER: ${POSTGRES_USER:-market_insights}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-market_insights}
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U market_insights"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market_insights}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - mi-net
 
-  # ── Backend FastAPI ────────────────────────────
   api:
     build: .
     container_name: mi-api
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://market_insights:${POSTGRES_PASSWORD:-changeme}@db:5432/market_insights
+      DATABASE_URL: postgresql://${POSTGRES_USER:-market_insights}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-market_insights}
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +39,6 @@ services:
     networks:
       - mi-net
 
-  # ── Frontend React ─────────────────────────────
   frontend:
     build:
       context: ./market_insights/frontend-react
@@ -55,7 +52,6 @@ services:
     networks:
       - mi-net
 
-  # ── Nginx reverse proxy ────────────────────────
   nginx:
     image: nginx:1.27-alpine
     container_name: mi-nginx
@@ -75,7 +71,6 @@ services:
     networks:
       - mi-net
 
-  # ── Certbot SSL ────────────────────────────────
   certbot:
     image: certbot/certbot:latest
     container_name: mi-certbot
