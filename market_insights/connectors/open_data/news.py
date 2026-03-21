@@ -1,11 +1,4 @@
-"""Multi-source news connector with RSS, Alpha Vantage, and sample fallback.
-
-RSS feeds used (all free, no key):
-- Google News RSS (filtered by ticker)
-- Yahoo Finance RSS
-- Seeking Alpha RSS (if available)
-"""
-
+"""Multi-source news connector — HTML nettoyé + résumé extractif."""
 from __future__ import annotations
 
 import json
@@ -16,25 +9,21 @@ from pathlib import Path
 from market_insights.connectors.open_data.base import BaseHTTPConnector
 from market_insights.core.cache import ttl_cache
 from market_insights.core.config import settings
+from market_insights.nlp.summarizer import strip_html, summarize
 
 logger = logging.getLogger(__name__)
-
 SAMPLE_NEWS = Path(__file__).resolve().parents[2] / "data" / "sample" / "news.json"
 
 
 class SampleNewsConnector:
     provider_name = "sample_news"
-
     def fetch(self, ticker: str) -> list[dict]:
         data = json.loads(SAMPLE_NEWS.read_text(encoding="utf-8"))
         return data.get(ticker.upper(), [])
 
 
 class RSSNewsConnector(BaseHTTPConnector):
-    """Multi-feed RSS news aggregator."""
-
     provider_name = "rss"
-
     RSS_FEEDS = [
         "https://news.google.com/rss/search?q={ticker}%20stock&hl=en-US&gl=US&ceid=US:en",
     ]
@@ -46,86 +35,71 @@ class RSSNewsConnector(BaseHTTPConnector):
     def fetch(self, ticker: str, max_items: int = 10) -> list[dict]:
         if not self.use_network:
             return SampleNewsConnector().fetch(ticker)
-
         all_items: list[dict] = []
-        for feed_url_template in self.RSS_FEEDS:
+        for tpl in self.RSS_FEEDS:
             try:
-                url = feed_url_template.format(ticker=ticker.upper())
-                xml_text = self.get_text(
-                    url, cache_key=f"rss:{ticker}:{feed_url_template[:30]}"
-                )
-                items = self._parse_rss(xml_text, max_items=max_items)
-                all_items.extend(items)
+                url = tpl.format(ticker=ticker.upper())
+                xml_text = self.get_text(url, cache_key=f"rss:{ticker}:{tpl[:30]}")
+                all_items.extend(self._parse_rss(xml_text, ticker, max_items))
             except Exception as exc:
                 logger.warning("RSS feed failed for %s: %s", ticker, exc)
-
         if not all_items:
-            logger.info("No RSS items found for %s, falling back to sample", ticker)
             return SampleNewsConnector().fetch(ticker)
-
-        # Deduplicate by title
-        seen_titles: set[str] = set()
+        seen: set[str] = set()
         unique: list[dict] = []
         for item in all_items:
-            title_key = item["title"].lower().strip()[:60]
-            if title_key not in seen_titles:
-                seen_titles.add(title_key)
+            k = item["title"].lower().strip()[:60]
+            if k not in seen:
+                seen.add(k)
                 unique.append(item)
-
         return unique[:max_items]
 
     @staticmethod
-    def _parse_rss(xml_text: str, max_items: int = 10) -> list[dict]:
+    def _parse_rss(xml_text: str, ticker: str, max_items: int = 10) -> list[dict]:
         root = ET.fromstring(xml_text)
         items: list[dict] = []
-        for item_el in root.findall(".//item")[:max_items]:
-            items.append(
-                {
-                    "title": item_el.findtext("title", default=""),
-                    "link": item_el.findtext("link", default=""),
-                    "published_at": item_el.findtext("pubDate", default=""),
-                    "content": (item_el.findtext("description", default="") or "")[
-                        :400
-                    ],
-                    "source": item_el.findtext("source", default="RSS"),
-                }
-            )
+        for el in root.findall(".//item")[:max_items]:
+            raw_title = el.findtext("title", default="")
+            raw_desc = el.findtext("description", default="")
+            raw_source = el.findtext("source", default="")
+            raw_link = el.findtext("link", default="")
+            # Clean HTML
+            clean_title = strip_html(raw_title)
+            clean_desc = strip_html(raw_desc)
+            # Extract source from title "... - Forbes" pattern
+            source = raw_source
+            if not source and " - " in clean_title:
+                source = clean_title.rsplit(" - ", 1)[-1].strip()
+                clean_title = clean_title.rsplit(" - ", 1)[0].strip()
+            # Summarize description
+            summary = summarize(clean_desc, max_sentences=2, max_chars=250) if clean_desc else ""
+            items.append({
+                "title": clean_title,
+                "link": raw_link,
+                "published_at": el.findtext("pubDate", default=""),
+                "content": summary,
+                "source": source or "RSS",
+            })
         return items
 
 
 class MultiNewsConnector:
-    """Cascading news connector: Alpha Vantage → RSS → Sample."""
-
     provider_name = "multi_news"
-
     def fetch(self, ticker: str, max_items: int = 10) -> list[dict]:
-        # 1. Alpha Vantage news sentiment
         try:
-            from market_insights.connectors.open_data.alpha_vantage import (
-                AlphaVantageNewsConnector,
-            )
-
+            from market_insights.connectors.open_data.alpha_vantage import AlphaVantageNewsConnector
             conn = AlphaVantageNewsConnector()
             if conn.available():
                 items = conn.fetch(ticker, limit=max_items)
                 if items:
-                    logger.info(
-                        "News for %s resolved via Alpha Vantage (%d items)",
-                        ticker,
-                        len(items),
-                    )
                     return items
-        except Exception as exc:
-            logger.debug("Alpha Vantage news failed for %s: %s", ticker, exc)
-
-        # 2. RSS feeds
+        except Exception:
+            pass
         try:
             conn = RSSNewsConnector(use_network=settings.use_network)
             items = conn.fetch(ticker, max_items=max_items)
             if items:
                 return items
-        except Exception as exc:
-            logger.debug("RSS news failed for %s: %s", ticker, exc)
-
-        # 3. Sample
+        except Exception:
+            pass
         return SampleNewsConnector().fetch(ticker)

@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     lmstudio_model: str = "default"
 
     llm_temperature: float = 0.3
-    llm_max_tokens: int = 1500
+    llm_max_tokens: int = 800
 
     # ── RAG ────────────────────────────────────────────────────────
     rag_embedding_model: str = "all-MiniLM-L6-v2"  # sentence-transformers model

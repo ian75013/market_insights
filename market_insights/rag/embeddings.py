@@ -8,6 +8,10 @@ For production, swap to pgvector or Qdrant.
 from __future__ import annotations
 
 import hashlib
+import re
+
+_URL_RE = re.compile(r'https?://\S+')
+_HTML_RE = re.compile(r'<[^>]+>')
 import logging
 import threading
 from typing import Any
@@ -108,7 +112,7 @@ class VectorStore:
         for i, chunk in enumerate(chunks):
             entries.append(
                 {
-                    "text": chunk["text"],
+                    "text": re.sub(r"\s+", " ", _HTML_RE.sub(" ", _URL_RE.sub("", chunk["text"]))).strip(),
                     "vector": vectors[i],
                     "metadata": chunk.get("metadata", {}),
                     "hash": hashlib.md5(chunk["text"].encode()).hexdigest()[:12],

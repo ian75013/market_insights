@@ -9,6 +9,7 @@ New in v4:
 """
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -329,6 +330,25 @@ def llm_chat(req: ChatRequest, db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+
+
+@app.post("/llm/chat/stream", tags=["llm"])
+def llm_chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
+    """RAG chat with Server-Sent Events streaming."""
+    from market_insights.rag.chat import rag_chat_stream
+
+    def gen():
+        yield from rag_chat_stream(
+            db, ticker=req.ticker, question=req.question,
+            llm_backend=req.llm_backend, llm_model=req.llm_model,
+            language=req.language, top_k=req.top_k,
+        )
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
 
 # ━━ Cache management ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
