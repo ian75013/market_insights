@@ -20,7 +20,7 @@ import hashlib
 import json
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 
@@ -49,7 +49,9 @@ class CacheStore:
 
     def set(self, key: str, value: Any, ttl: int = 300) -> None:
         with self._lock:
-            self._data[key] = _CacheEntry(value=value, expires_at=time.monotonic() + ttl)
+            self._data[key] = _CacheEntry(
+                value=value, expires_at=time.monotonic() + ttl
+            )
 
     def invalidate(self, prefix: str = "") -> int:
         with self._lock:
@@ -63,7 +65,11 @@ class CacheStore:
             now = time.monotonic()
             total = len(self._data)
             alive = sum(1 for e in self._data.values() if now <= e.expires_at)
-            return {"total_keys": total, "alive_keys": alive, "expired_keys": total - alive}
+            return {
+                "total_keys": total,
+                "alive_keys": alive,
+                "expired_keys": total - alive,
+            }
 
 
 cache_store = CacheStore()
@@ -75,7 +81,13 @@ def ttl_cache(seconds: int = 300, prefix: str = ""):
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            raw = json.dumps({"a": [str(a) for a in args], "k": {str(k): str(v) for k, v in sorted(kwargs.items())}}, sort_keys=True)
+            raw = json.dumps(
+                {
+                    "a": [str(a) for a in args],
+                    "k": {str(k): str(v) for k, v in sorted(kwargs.items())},
+                },
+                sort_keys=True,
+            )
             key = f"{prefix or fn.__qualname__}:{hashlib.md5(raw.encode()).hexdigest()}"
             cached = cache_store.get(key)
             if cached is not None:
@@ -84,7 +96,9 @@ def ttl_cache(seconds: int = 300, prefix: str = ""):
             cache_store.set(key, result, ttl=seconds)
             return result
 
-        wrapper.cache_invalidate = lambda: cache_store.invalidate(prefix or fn.__qualname__)
+        wrapper.cache_invalidate = lambda: cache_store.invalidate(
+            prefix or fn.__qualname__
+        )
         return wrapper
 
     return decorator

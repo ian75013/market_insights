@@ -1,6 +1,7 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, UTC
 
 
 class Base(DeclarativeBase):
@@ -33,4 +34,6 @@ class Document(Base):
     url: Mapped[str] = mapped_column(String(512), default="")
     content: Mapped[str] = mapped_column(Text)
     version: Mapped[int] = mapped_column(Integer, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC)
+    )

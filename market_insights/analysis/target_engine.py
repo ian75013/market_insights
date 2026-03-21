@@ -5,7 +5,6 @@ import pandas as pd
 
 def compute_price_levels(df: pd.DataFrame) -> dict:
     latest = df.iloc[-1]
-    prev = df.iloc[-2] if len(df) > 1 else latest
 
     high = float(latest["high"])
     low = float(latest["low"])

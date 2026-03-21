@@ -10,9 +10,9 @@ Resolution order:
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
-import json
 
 from market_insights.connectors.open_data.base import BaseHTTPConnector
 from market_insights.core.cache import ttl_cache
@@ -20,17 +20,33 @@ from market_insights.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-SAMPLE_FILE = Path(__file__).resolve().parents[2] / "data" / "sample" / "fundamentals.json"
+SAMPLE_FILE = (
+    Path(__file__).resolve().parents[2] / "data" / "sample" / "fundamentals.json"
+)
 
 # CIK lookup for common tickers (SEC EDGAR)
 TICKER_TO_CIK = {
-    "AAPL": "0000320193", "MSFT": "0000789019", "GOOGL": "0001652044",
-    "AMZN": "0001018724", "NVDA": "0001045810", "META": "0001326801",
-    "TSLA": "0001318605", "JPM": "0000019617", "V": "0001403161",
-    "JNJ": "0000200406", "WMT": "0000104169", "PG": "0000080424",
-    "MA": "0001141391", "UNH": "0000731766", "HD": "0000354950",
-    "DIS": "0001744489", "BAC": "0000070858", "NFLX": "0001065280",
-    "INTC": "0000050863", "AMD": "0000002488", "CRM": "0001108524",
+    "AAPL": "0000320193",
+    "MSFT": "0000789019",
+    "GOOGL": "0001652044",
+    "AMZN": "0001018724",
+    "NVDA": "0001045810",
+    "META": "0001326801",
+    "TSLA": "0001318605",
+    "JPM": "0000019617",
+    "V": "0001403161",
+    "JNJ": "0000200406",
+    "WMT": "0000104169",
+    "PG": "0000080424",
+    "MA": "0001141391",
+    "UNH": "0000731766",
+    "HD": "0000354950",
+    "DIS": "0001744489",
+    "BAC": "0000070858",
+    "NFLX": "0001065280",
+    "INTC": "0000050863",
+    "AMD": "0000002488",
+    "CRM": "0001108524",
 }
 
 
@@ -80,14 +96,20 @@ class SECCompanyFactsConnector(BaseHTTPConnector):
                 entries = units.get(unit_type, [])
                 if entries:
                     # Sort by end date and return most recent
-                    sorted_entries = sorted(entries, key=lambda x: x.get("end", ""), reverse=True)
+                    sorted_entries = sorted(
+                        entries, key=lambda x: x.get("end", ""), reverse=True
+                    )
                     try:
                         return float(sorted_entries[0].get("val", 0))
                     except (ValueError, TypeError):
                         continue
             return None
 
-        revenue = _latest_value("Revenues") or _latest_value("RevenueFromContractWithCustomerExcludingAssessedTax") or 0
+        revenue = (
+            _latest_value("Revenues")
+            or _latest_value("RevenueFromContractWithCustomerExcludingAssessedTax")
+            or 0
+        )
         net_income = _latest_value("NetIncomeLoss") or 0
         total_assets = _latest_value("Assets") or 1
         total_liabilities = _latest_value("Liabilities") or 0
@@ -120,26 +142,36 @@ class MultiFundamentalsConnector:
 
         # 1. Yahoo Finance
         try:
-            from market_insights.connectors.open_data.yahoo import YFinanceFundamentalsConnector
+            from market_insights.connectors.open_data.yahoo import (
+                YFinanceFundamentalsConnector,
+            )
+
             conn = YFinanceFundamentalsConnector()
             if conn.available():
                 result = conn.fetch(ticker)
                 if result and result.get("pe", 0) > 0:
                     result["_source"] = "yahoo"
-                    logger.info("Fundamentals for %s resolved via Yahoo Finance", ticker)
+                    logger.info(
+                        "Fundamentals for %s resolved via Yahoo Finance", ticker
+                    )
                     return result
         except Exception as exc:
             errors.append(f"yahoo: {exc}")
 
         # 2. Alpha Vantage
         try:
-            from market_insights.connectors.open_data.alpha_vantage import AlphaVantageOverviewConnector
+            from market_insights.connectors.open_data.alpha_vantage import (
+                AlphaVantageOverviewConnector,
+            )
+
             conn = AlphaVantageOverviewConnector()
             if conn.available():
                 result = conn.fetch(ticker)
                 if result and result.get("name"):
                     result["_source"] = "alpha_vantage"
-                    logger.info("Fundamentals for %s resolved via Alpha Vantage", ticker)
+                    logger.info(
+                        "Fundamentals for %s resolved via Alpha Vantage", ticker
+                    )
                     return result
         except Exception as exc:
             errors.append(f"alpha_vantage: {exc}")
@@ -147,6 +179,7 @@ class MultiFundamentalsConnector:
         # 3. Financial Modeling Prep
         try:
             from market_insights.connectors.open_data.fmp import FMPProfileConnector
+
             conn = FMPProfileConnector()
             if conn.available():
                 result = conn.fetch(ticker)
@@ -178,4 +211,6 @@ class MultiFundamentalsConnector:
         except Exception as exc:
             errors.append(f"sample: {exc}")
 
-        raise ValueError(f"No fundamentals found for {ticker}. Errors: {'; '.join(errors)}")
+        raise ValueError(
+            f"No fundamentals found for {ticker}. Errors: {'; '.join(errors)}"
+        )

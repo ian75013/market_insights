@@ -5,9 +5,9 @@ FRED API key: https://fred.stlouisfed.org/docs/api/api_key.html (free)
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
-import json
 
 from market_insights.connectors.open_data.base import BaseHTTPConnector
 from market_insights.core.cache import ttl_cache
@@ -114,8 +114,6 @@ class FREDConnector(BaseHTTPConnector):
 
         return dashboard
 
-    def fetch_series_history(
-        self, series_id: str, limit: int = 252
-    ) -> list[dict]:
+    def fetch_series_history(self, series_id: str, limit: int = 252) -> list[dict]:
         """Fetch historical series for charting."""
         return self.fetch_series(series_id, limit=limit, sort_order="asc")

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 import pandas as pd
 
 
@@ -16,7 +17,9 @@ class BaselineFairValueModel:
     mais comme une estimation pilotée par momentum, risque, croissance et endettement.
     """
 
-    def predict(self, df: pd.DataFrame, fundamentals: dict | None = None) -> FairValueResult:
+    def predict(
+        self, df: pd.DataFrame, fundamentals: dict | None = None
+    ) -> FairValueResult:
         fundamentals = fundamentals or {}
         latest = df.sort_values("date").iloc[-1]
         current_price = float(latest["close"])
@@ -30,11 +33,20 @@ class BaselineFairValueModel:
 
         growth_boost = 1.0 + 0.20 * revenue_growth + 0.12 * eps_growth
         momentum_boost = 1.0 + 0.25 * momentum + 0.03 * trend
-        risk_penalty = 1.0 - min(volatility, 0.3) * 0.35 - min(max(debt_to_equity - 1.0, 0.0), 2.0) * 0.03
+        risk_penalty = (
+            1.0
+            - min(volatility, 0.3) * 0.35
+            - min(max(debt_to_equity - 1.0, 0.0), 2.0) * 0.03
+        )
         rsi_penalty = 0.98 if rsi > 70 else (1.02 if rsi < 35 else 1.0)
 
-        fair_value = current_price * growth_boost * momentum_boost * rsi_penalty * risk_penalty
-        confidence = max(0.35, min(0.92, 0.62 + 0.12 * trend + 0.20 * revenue_growth - 0.45 * volatility))
+        fair_value = (
+            current_price * growth_boost * momentum_boost * rsi_penalty * risk_penalty
+        )
+        confidence = max(
+            0.35,
+            min(0.92, 0.62 + 0.12 * trend + 0.20 * revenue_growth - 0.45 * volatility),
+        )
 
         return FairValueResult(
             fair_value=round(float(fair_value), 2),

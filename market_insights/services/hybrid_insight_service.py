@@ -29,9 +29,15 @@ class HybridInsightService:
             title = src.get("title") or src.get("source") or "source"
             snippet = src.get("snippet") or ""
             low = f"{title} {snippet}".lower()
-            if any(k in low for k in ["growth", "beat", "upgrade", "partnership", "ai", "revenue"]):
+            if any(
+                k in low
+                for k in ["growth", "beat", "upgrade", "partnership", "ai", "revenue"]
+            ):
                 catalysts.append(title)
-            if any(k in low for k in ["risk", "downgrade", "debt", "lawsuit", "weak", "decline"]):
+            if any(
+                k in low
+                for k in ["risk", "downgrade", "debt", "lawsuit", "weak", "decline"]
+            ):
                 risks.append(title)
 
         if not catalysts:
@@ -73,7 +79,10 @@ class HybridInsightService:
                 "confidence": insight.get("scores", {}).get("confidence_score", 0),
                 "opinion": insight.get("summary", {}).get("opinion", "n/a"),
             },
-            "disclaimer": "Analyse générée automatiquement à titre informatif. Ce contenu ne constitue pas un conseil en investissement.",
+            "disclaimer": (
+                "Analyse générée automatiquement à titre informatif. "
+                "Ce contenu ne constitue pas un conseil en investissement."
+            ),
         }
 
     def _build_executive_summary(
@@ -100,8 +109,11 @@ class HybridInsightService:
             angle = "Le scénario hybride reste équilibré"
 
         return (
-            f"{angle} sur {ticker}. Le prix actuel ressort à {current_price:.2f} tandis que le modèle de juste valeur "
-            f"estime un niveau autour de {model_price:.2f}, soit un écart de {gap_pct:.2f}%. "
-            f"La tendance de court terme est {trend} et la tendance de fond {long_trend}. "
-            f"L'opinion technique courante est '{opinion}' avec un niveau de confiance proche de {confidence}%."
+            f"{angle} sur {ticker}. Le prix actuel ressort à "
+            f"{current_price:.2f} tandis que le modèle de juste valeur "
+            f"estime un niveau autour de {model_price:.2f}, soit un écart de "
+            f"{gap_pct:.2f}%. La tendance de court terme est {trend} et "
+            f"la tendance de fond {long_trend}. L'opinion technique courante "
+            f"est '{opinion}' avec un niveau de confiance proche de "
+            f"{confidence}%."
         )

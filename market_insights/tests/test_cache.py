@@ -1,6 +1,7 @@
 """Tests for the TTL cache layer."""
 
 import time
+
 from market_insights.core.cache import CacheStore, ttl_cache
 
 

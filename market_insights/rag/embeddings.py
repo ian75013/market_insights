@@ -33,14 +33,23 @@ def _load_model():
         if settings.rag_use_vectors:
             try:
                 from sentence_transformers import SentenceTransformer
+
                 _model = SentenceTransformer(settings.rag_embedding_model)
                 _use_st = True
-                logger.info("RAG: loaded sentence-transformers model '%s'", settings.rag_embedding_model)
+                logger.info(
+                    "RAG: loaded sentence-transformers model '%s'",
+                    settings.rag_embedding_model,
+                )
                 return
             except Exception as exc:
-                logger.warning("RAG: sentence-transformers unavailable (%s), falling back to TF-IDF", exc)
+                logger.warning(
+                    "RAG: sentence-transformers unavailable (%s), "
+                    "falling back to TF-IDF",
+                    exc,
+                )
         # TF-IDF fallback
         from sklearn.feature_extraction.text import TfidfVectorizer
+
         _model = TfidfVectorizer(max_features=512, stop_words="english")
         _use_st = False
         logger.info("RAG: using TF-IDF fallback embeddings")
@@ -61,7 +70,9 @@ def embed_query(query: str) -> np.ndarray:
     """Embed a single query → (dim,) numpy array."""
     _load_model()
     if _use_st:
-        return _model.encode([query], show_progress_bar=False, normalize_embeddings=True)[0]
+        return _model.encode(
+            [query], show_progress_bar=False, normalize_embeddings=True
+        )[0]
     else:
         mat = _model.transform([query])
         return mat.toarray().astype(np.float32)[0]
@@ -79,6 +90,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 # ━━ In-memory vector store ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 class VectorStore:
     """Simple in-memory vector store, keyed by ticker."""
 
@@ -94,15 +106,19 @@ class VectorStore:
         vectors = embed_texts(texts)
         entries = []
         for i, chunk in enumerate(chunks):
-            entries.append({
-                "text": chunk["text"],
-                "vector": vectors[i],
-                "metadata": chunk.get("metadata", {}),
-                "hash": hashlib.md5(chunk["text"].encode()).hexdigest()[:12],
-            })
+            entries.append(
+                {
+                    "text": chunk["text"],
+                    "vector": vectors[i],
+                    "metadata": chunk.get("metadata", {}),
+                    "hash": hashlib.md5(chunk["text"].encode()).hexdigest()[:12],
+                }
+            )
         with self._lock:
             self._data[ticker.upper()] = entries
-        logger.info("VectorStore: indexed %d chunks for %s", len(entries), ticker.upper())
+        logger.info(
+            "VectorStore: indexed %d chunks for %s", len(entries), ticker.upper()
+        )
         return len(entries)
 
     def search(self, ticker: str, query: str, top_k: int = 5) -> list[dict]:
@@ -115,11 +131,13 @@ class VectorStore:
         scored = []
         for entry in entries:
             sim = cosine_similarity(q_vec, entry["vector"])
-            scored.append({
-                "text": entry["text"],
-                "score": round(float(sim), 4),
-                **entry["metadata"],
-            })
+            scored.append(
+                {
+                    "text": entry["text"],
+                    "score": round(float(sim), 4),
+                    **entry["metadata"],
+                }
+            )
         scored.sort(key=lambda x: x["score"], reverse=True)
         return scored[:top_k]
 

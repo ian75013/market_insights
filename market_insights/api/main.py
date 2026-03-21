@@ -28,11 +28,20 @@ init_db()
 app = FastAPI(
     title="Market Insights API",
     version="4.0.0",
-    description="Plateforme de recherche actions — ETL multi-source, analyse technique, RAG vectoriel, LLM multi-provider, chandeliers annotés.",
+    description=(
+        "Plateforme de recherche actions — ETL multi-source, "
+        "analyse technique, RAG vectoriel, LLM multi-provider, "
+        "chandeliers annotés."
+    ),
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,19 +53,48 @@ hybrid_service = HybridInsightService()
 
 # ━━ Health & Info ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @app.get("/health", tags=["system"])
 def health():
-    return {"status": "ok", "version": "4.0.0", "network_enabled": settings.use_network, "default_provider": settings.default_price_provider}
+    return {
+        "status": "ok",
+        "version": "4.0.0",
+        "network_enabled": settings.use_network,
+        "default_provider": settings.default_price_provider,
+    }
 
 
 @app.get("/sources", tags=["system"])
 def sources():
     return {
-        "price_providers": ["sample", "stooq", "yahoo", "alpha_vantage", "coingecko", "ibkr", "auto"],
-        "fundamentals_providers": ["sample", "yahoo", "alpha_vantage", "fmp", "sec_edgar", "multi"],
+        "price_providers": [
+            "sample",
+            "stooq",
+            "yahoo",
+            "alpha_vantage",
+            "coingecko",
+            "ibkr",
+            "auto",
+        ],
+        "fundamentals_providers": [
+            "sample",
+            "yahoo",
+            "alpha_vantage",
+            "fmp",
+            "sec_edgar",
+            "multi",
+        ],
         "news_providers": ["sample", "rss", "alpha_vantage", "multi"],
         "macro_providers": ["sample", "fred"],
-        "llm_providers": ["openai", "anthropic", "mistral", "groq", "ollama", "lmstudio", "fallback"],
+        "llm_providers": [
+            "openai",
+            "anthropic",
+            "mistral",
+            "groq",
+            "ollama",
+            "lmstudio",
+            "fallback",
+        ],
     }
 
 
@@ -80,8 +118,13 @@ def providers():
 
 # ━━ ETL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @app.post("/etl/run", tags=["etl"])
-def run_pipeline(ticker: str = Query(..., min_length=1), provider: str = Query("sample"), db: Session = Depends(get_db)):
+def run_pipeline(
+    ticker: str = Query(..., min_length=1),
+    provider: str = Query("sample"),
+    db: Session = Depends(get_db),
+):
     try:
         return run_etl(db, ticker=ticker, provider=provider)
     except Exception as exc:
@@ -89,7 +132,11 @@ def run_pipeline(ticker: str = Query(..., min_length=1), provider: str = Query("
 
 
 @app.post("/etl/batch", tags=["etl"])
-def run_batch_pipeline(tickers: str = Query(...), provider: str = Query("sample"), db: Session = Depends(get_db)):
+def run_batch_pipeline(
+    tickers: str = Query(...),
+    provider: str = Query("sample"),
+    db: Session = Depends(get_db),
+):
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if not ticker_list:
         raise HTTPException(status_code=400, detail="No tickers provided")
@@ -97,6 +144,7 @@ def run_batch_pipeline(tickers: str = Query(...), provider: str = Query("sample"
 
 
 # ━━ Analysis ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 @app.get("/fair-value/{ticker}", response_model=FairValueResponse, tags=["analysis"])
 def fair_value(ticker: str, db: Session = Depends(get_db)):
@@ -133,11 +181,13 @@ def hybrid_insight(ticker: str, db: Session = Depends(get_db)):
 
 # ━━ Candlestick chart ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @app.get("/chart/candlestick/{ticker}", tags=["chart"])
 def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
     """Return OHLCV bars with per-bar signal annotations for chart rendering."""
     try:
         from market_insights.analysis.candlestick_engine import annotate_candlesticks
+
         df = service._load_df(db, ticker)
         bars = annotate_candlesticks(df)
         # Summary of all detected signals
@@ -151,9 +201,15 @@ def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
             "bars": bars,
             "signal_summary": {
                 "total": len(all_signals),
-                "bullish": len([s for s in all_signals if s.get("severity") == "bullish"]),
-                "bearish": len([s for s in all_signals if s.get("severity") == "bearish"]),
-                "neutral": len([s for s in all_signals if s.get("severity") == "neutral"]),
+                "bullish": len(
+                    [s for s in all_signals if s.get("severity") == "bullish"]
+                ),
+                "bearish": len(
+                    [s for s in all_signals if s.get("severity") == "bearish"]
+                ),
+                "neutral": len(
+                    [s for s in all_signals if s.get("severity") == "neutral"]
+                ),
             },
             "signals": all_signals[-20:],  # last 20 signals for display
         }
@@ -162,6 +218,7 @@ def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
 
 
 # ━━ Data ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 @app.get("/rag/sources/{ticker}", tags=["rag"])
 def rag_sources(ticker: str, db: Session = Depends(get_db)):
@@ -172,6 +229,7 @@ def rag_sources(ticker: str, db: Session = Depends(get_db)):
 def rag_index(ticker: str, db: Session = Depends(get_db)):
     """Manually trigger RAG vector indexing for a ticker."""
     from market_insights.rag.store import index_documents
+
     count = index_documents(db, ticker)
     return {"ticker": ticker.upper(), "indexed_chunks": count}
 
@@ -179,13 +237,18 @@ def rag_index(ticker: str, db: Session = Depends(get_db)):
 @app.get("/rag/stats", tags=["rag"])
 def rag_stats():
     from market_insights.rag.embeddings import vector_store
+
     return vector_store.stats()
 
 
 @app.get("/fundamentals/{ticker}", tags=["data"])
 def fundamentals(ticker: str):
     try:
-        from market_insights.connectors.open_data.fundamentals import MultiFundamentalsConnector, SampleFundamentalsConnector
+        from market_insights.connectors.open_data.fundamentals import (
+            MultiFundamentalsConnector,
+            SampleFundamentalsConnector,
+        )
+
         if settings.use_network:
             result = MultiFundamentalsConnector().fetch(ticker)
         else:
@@ -198,7 +261,11 @@ def fundamentals(ticker: str):
 @app.get("/news/{ticker}", tags=["data"])
 def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
     try:
-        from market_insights.connectors.open_data.news import MultiNewsConnector, SampleNewsConnector
+        from market_insights.connectors.open_data.news import (
+            MultiNewsConnector,
+            SampleNewsConnector,
+        )
+
         if settings.use_network:
             items = MultiNewsConnector().fetch(ticker, max_items=limit)
         else:
@@ -211,7 +278,11 @@ def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
 @app.get("/macro", tags=["data"])
 def macro_dashboard():
     try:
-        from market_insights.connectors.open_data.macro import FREDConnector, SampleMacroConnector
+        from market_insights.connectors.open_data.macro import (
+            FREDConnector,
+            SampleMacroConnector,
+        )
+
         fred = FREDConnector()
         if fred.available():
             return {"source": "fred", "data": fred.fetch_macro_dashboard()}
@@ -222,10 +293,12 @@ def macro_dashboard():
 
 # ━━ LLM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+
 @app.get("/llm/providers", tags=["llm"])
 def llm_providers():
     """List all LLM providers with availability and model lists."""
     from market_insights.llm.providers import list_providers
+
     return {"providers": list_providers(), "active_backend": settings.llm_backend}
 
 
@@ -240,9 +313,10 @@ class ChatRequest(BaseModel):
 
 @app.post("/llm/chat", tags=["llm"])
 def llm_chat(req: ChatRequest, db: Session = Depends(get_db)):
-    """RAG-powered chat: retrieve context → augment prompt → generate with selected LLM."""
+    """RAG-powered chat: retrieve context, build the prompt, then generate."""
     try:
         from market_insights.rag.chat import rag_chat
+
         return rag_chat(
             db,
             ticker=req.ticker,
@@ -257,6 +331,7 @@ def llm_chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 
 # ━━ Cache management ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 
 @app.get("/cache/stats", tags=["system"])
 def cache_stats():
