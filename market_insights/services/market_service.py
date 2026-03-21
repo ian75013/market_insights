@@ -1,6 +1,12 @@
+"""Market Insight Service — core orchestration layer.
+
+Uses multi-source fundamentals, configurable providers, and enriched analysis.
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,7 +15,8 @@ from market_insights.analysis.feature_engineering import compute_market_context
 from market_insights.analysis.signal_detection import detect_signals
 from market_insights.analysis.target_engine import compute_price_levels
 from market_insights.analysis.technical_scoring import build_summary
-from market_insights.connectors.open_data.fundamentals import SampleFundamentalsConnector
+from market_insights.connectors.open_data.fundamentals import MultiFundamentalsConnector, SampleFundamentalsConnector
+from market_insights.core.config import settings
 from market_insights.db.models import PriceBar
 from market_insights.etl.transformers.features import compute_features
 from market_insights.llm.report_generator import generate_report
@@ -20,14 +27,24 @@ from market_insights.rag.store import retrieve_context
 class MarketInsightService:
     def __init__(self) -> None:
         self.model = BaselineFairValueModel()
-        self.fundamentals = SampleFundamentalsConnector()
+
+    def _get_fundamentals(self, ticker: str) -> dict:
+        """Fetch fundamentals with multi-source fallback."""
+        if settings.use_network:
+            try:
+                result = MultiFundamentalsConnector().fetch(ticker)
+                result.pop("_source", None)
+                return result
+            except Exception:
+                pass
+        return SampleFundamentalsConnector().fetch(ticker)
 
     def _load_df(self, db: Session, ticker: str) -> pd.DataFrame:
         rows = db.execute(
             select(PriceBar).where(PriceBar.ticker == ticker.upper()).order_by(PriceBar.date.asc())
         ).scalars().all()
         if not rows:
-            raise ValueError(f"No price data found for ticker={ticker}")
+            raise ValueError(f"No price data found for ticker={ticker}. Run ETL first.")
         return pd.DataFrame(
             [
                 {
@@ -44,7 +61,7 @@ class MarketInsightService:
         )
 
     def compute_fair_value(self, db: Session, ticker: str) -> dict:
-        fundamentals = self.fundamentals.fetch(ticker)
+        fundamentals = self._get_fundamentals(ticker)
         df = compute_features(self._load_df(db, ticker))
         latest = df.iloc[-1]
         result = self.model.predict(df, fundamentals=fundamentals)
@@ -57,6 +74,7 @@ class MarketInsightService:
             "upside_pct": upside_pct,
             "confidence": result.confidence,
             "factors": result.factors,
+            "method": "baseline_multifactor",
         }
 
     def get_rag_sources(self, db: Session, ticker: str) -> list[dict]:
@@ -69,7 +87,7 @@ class MarketInsightService:
         technicals = df.iloc[-1][
             ["rsi_14", "volatility_20", "trend_signal", "momentum_20", "drawdown", "sma_20", "sma_50", "sma_200"]
         ].to_dict()
-        fundamentals = self.fundamentals.fetch(ticker)
+        fundamentals = self._get_fundamentals(ticker)
         rag_context = self.get_rag_sources(db, ticker)
 
         score = round(
@@ -82,7 +100,7 @@ class MarketInsightService:
                     + 0.20 * max(-0.2, min(0.2, technicals["momentum_20"]))
                     + 0.12 * fair["confidence"]
                     + 0.12 * max(-0.1, min(0.3, fundamentals.get("revenue_growth", 0.0)))
-                    - 0.08 * max(0.0, fundamentals.get("debt_to_equity", 1.0) - 1.5)
+                    - 0.08 * max(0.0, fundamentals.get("debt_to_equity", 1.0) - 1.5),
                 ),
             ),
             2,
@@ -134,14 +152,25 @@ class MarketInsightService:
             "narrative": analysis,
             "disclaimer": "Contenu informatif et analytique, non personnalisé, ne constituant pas un conseil en investissement.",
         }
+
+        # ── Scores dict for hybrid service ─────────────────────────
+        scores = {
+            "overall_score": score,
+            "trend_score": 0.55 + 0.25 * float(technicals["trend_signal"]) + 0.15 * technicals["momentum_20"],
+            "confidence_score": fair["confidence"],
+        }
+
         return {
             "ticker": ticker,
             "generated_at": generated_at,
             "score": score,
+            "scores": scores,
+            "last_price": fair["current_price"],
             "fair_value": fair["fair_value"],
             "analysis": analysis,
             "technicals": technical_payload,
             "fundamentals": fundamentals,
             "sources": rag_context,
             "comparable": comparable,
+            "summary": summary,
         }

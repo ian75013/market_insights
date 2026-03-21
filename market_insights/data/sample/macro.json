@@ -1,11 +1,32 @@
 {
   "rates": {
-    "fed_funds": 4.5
+    "fed_funds": 4.25,
+    "treasury_10y": 4.38,
+    "treasury_2y": 4.15,
+    "treasury_3m": 4.55
   },
   "inflation": {
-    "cpi_yoy": 2.8
+    "cpi_yoy": 2.6,
+    "pce_core": 2.5
   },
   "growth": {
+    "gdp_real_q": 2.3,
     "gdp_nowcast": 2.1
+  },
+  "labor": {
+    "unemployment": 4.1,
+    "initial_claims": 218000,
+    "nonfarm_payrolls": 175000
+  },
+  "sentiment": {
+    "consumer_sentiment": 67.8,
+    "vix": 16.5
+  },
+  "housing": {
+    "housing_starts": 1380000,
+    "existing_home_sales": 4120000
+  },
+  "money": {
+    "m2_yoy_pct": 3.8
   }
 }
