@@ -44,6 +44,26 @@ TICKER_MAP = {
     "NEAR": "near",
 }
 
+# Synonymes Yahoo Finance → ticker crypto normalisé
+_YAHOO_CRYPTO_SUFFIXES = {"-USD", "-EUR", "-GBP", "-JPY", "-BTC"}
+
+
+def normalize_crypto_ticker(ticker: str) -> str:
+    """Normalise un ticker crypto : 'BTC-USD' → 'BTC', 'ETH-EUR' → 'ETH'."""
+    t = ticker.upper()
+    for suffix in _YAHOO_CRYPTO_SUFFIXES:
+        if t.endswith(suffix):
+            return t[: -len(suffix)]
+    return t
+
+
+def is_crypto_ticker(ticker: str) -> bool:
+    """Détecte si un ticker correspond à une crypto connue.
+
+    Reconnaît : 'BTC', 'BTC-USD', 'ETH-EUR', etc.
+    """
+    return normalize_crypto_ticker(ticker) in TICKER_MAP
+
 
 class CoinGeckoPriceConnector(BaseHTTPConnector):
     """Fetch crypto OHLC prices from CoinGecko."""
@@ -61,29 +81,62 @@ class CoinGeckoPriceConnector(BaseHTTPConnector):
         if not self.use_network:
             raise ConnectionError("CoinGecko: network disabled")
 
-        coin_id = TICKER_MAP.get(ticker.upper(), ticker.lower())
-        url = f"{CG_BASE}/coins/{coin_id}/ohlc?vs_currency=usd&days={days}"
-        logger.info("CoinGecko: fetching %s OHLC (%d days)", coin_id, days)
+        # Normalise : "BTC-USD" → "BTC" → "bitcoin"
+        base_ticker = normalize_crypto_ticker(ticker)
+        coin_id = TICKER_MAP.get(base_ticker, base_ticker.lower())
 
-        data = self.get_json(url, cache_key=f"cg_ohlc:{coin_id}:{days}")
+        # ── 1. OHLC data ────────────────────────────────────────────
+        url_ohlc = f"{CG_BASE}/coins/{coin_id}/ohlc?vs_currency=usd&days={days}"
+        logger.info("CoinGecko: fetching %s OHLC (%d days)", coin_id, days)
+        data = self.get_json(url_ohlc, cache_key=f"cg_ohlc:{coin_id}:{days}")
 
         if not data or not isinstance(data, list):
             raise ValueError(f"CoinGecko returned no OHLC for {ticker}")
 
+        store_ticker = base_ticker
         rows = []
         for ts, o, h, low_price, c in data:
             rows.append(
                 {
-                    "ticker": ticker.upper(),
+                    "ticker": store_ticker,
                     "date": datetime.utcfromtimestamp(ts / 1000),
-                    "open": o,
-                    "high": h,
-                    "low": low_price,
-                    "close": c,
-                    "volume": 0,  # OHLC endpoint doesn't include volume
+                    "open": float(o),
+                    "high": float(h),
+                    "low": float(low_price),
+                    "close": float(c),
+                    "volume": 0.0,
                 }
             )
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
+
+        # ── 2. Volume from market_chart (best effort) ───────────────
+        try:
+            url_mc = (
+                f"{CG_BASE}/coins/{coin_id}/market_chart"
+                f"?vs_currency=usd&days={days}&interval=daily"
+            )
+            mc = self.get_json(url_mc, cache_key=f"cg_mc:{coin_id}:{days}")
+            volumes = mc.get("total_volumes", [])
+            if volumes:
+                vol_df = pd.DataFrame(volumes, columns=["ts", "volume"])
+                vol_df["date"] = pd.to_datetime(
+                    vol_df["ts"], unit="ms", utc=True
+                ).dt.normalize().dt.tz_localize(None)
+                vol_df = vol_df.drop(columns=["ts"])
+                # Normalize OHLC dates to midnight for join
+                df["date_key"] = df["date"].dt.normalize()
+                df = df.merge(
+                    vol_df, left_on="date_key", right_on="date",
+                    how="left", suffixes=("", "_mc"),
+                )
+                df["volume"] = df["volume_mc"].fillna(0.0)
+                df = df.drop(
+                    columns=[c for c in df.columns if c.endswith("_mc") or c == "date_key"],
+                    errors="ignore",
+                )
+        except Exception as exc:
+            logger.debug("CoinGecko volume fetch failed for %s: %s", coin_id, exc)
+
         return df
 
 
@@ -103,7 +156,7 @@ class CoinGeckoInfoConnector(BaseHTTPConnector):
         if not self.use_network:
             raise ConnectionError("CoinGecko: network disabled")
 
-        coin_id = TICKER_MAP.get(ticker.upper(), ticker.lower())
+        coin_id = TICKER_MAP.get(normalize_crypto_ticker(ticker), ticker.lower())
         url = (
             f"{CG_BASE}/coins/{coin_id}?localization=false"
             "&tickers=false&community_data=false&developer_data=false"

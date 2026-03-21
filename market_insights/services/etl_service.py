@@ -23,7 +23,7 @@ from market_insights.connectors.open_data.news import (
     SampleNewsConnector,
 )
 from market_insights.core.config import settings
-from market_insights.etl.extractors.price_provider import PriceProviderRouter
+from market_insights.etl.extractors.price_provider import PriceProviderRouter, canonical_ticker, is_crypto
 from market_insights.etl.loaders.document_loader import replace_documents
 from market_insights.etl.loaders.sqlite_loader import load_price_bars
 from market_insights.etl.transformers.cleaning import clean_market_data
@@ -35,12 +35,18 @@ logger = logging.getLogger(__name__)
 def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
     """Run full ETL pipeline for a single ticker."""
     started = datetime.now(UTC)
-    ticker = ticker.upper()
+    # Normalise : BTC-USD → BTC (canonical crypto ticker for DB consistency)
+    ticker = canonical_ticker(ticker)
 
     # ── 1. Extract prices ──────────────────────────────────────────
     router = PriceProviderRouter(use_network=settings.use_network)
     raw_prices = router.fetch_prices(ticker, provider=provider)
-    used_provider = (provider or settings.default_price_provider).lower()
+    requested_provider = (provider or settings.default_price_provider).lower()
+    # Determine actual provider: crypto tickers are always routed to coingecko
+    if is_crypto(ticker) and requested_provider not in ("sample", "coingecko"):
+        used_provider = "coingecko"
+    else:
+        used_provider = requested_provider
 
     # ── 2. Transform ───────────────────────────────────────────────
     clean = clean_market_data(raw_prices)

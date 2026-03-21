@@ -95,7 +95,7 @@ Le mode batch permet de traiter plusieurs tickers en un appel : `POST /etl/batch
 
 ### Connecteurs de prix
 
-Le routeur de prix (`PriceProviderRouter`) supporte 7 providers. Le mode `auto` les essaie dans l'ordre de priorité suivant : Yahoo Finance, Stooq, Alpha Vantage, CoinGecko, puis Sample en dernier recours.
+Le routeur de prix (`PriceProviderRouter`) supporte 7 providers. Le mode `auto` détecte automatiquement les crypto-monnaies et adapte la cascade : pour les cryptos → CoinGecko en priorité, puis Sample ; pour les actions → Yahoo Finance, Stooq, Alpha Vantage, puis Sample. **Tous les endpoints normalisent les tickers crypto** (`BTC-USD` → `BTC`, `ETH-EUR` → `ETH`) via `canonical_ticker()` pour garantir la cohérence en base de données.
 
 **sample** — Données embarquées dans `data/sample/prices.csv`. 10 tickers, 55 jours chacun. Aucune connexion réseau requise. C'est le provider par défaut.
 
@@ -105,9 +105,26 @@ Le routeur de prix (`PriceProviderRouter`) supporte 7 providers. Le mode `auto` 
 
 **alpha_vantage** — Alpha Vantage, prix journaliers ajustés. Nécessite `ALPHA_VANTAGE_API_KEY` (gratuite, 25 requêtes/jour).
 
-**coingecko** — CoinGecko pour les crypto-monnaies. Pas de clé API. Données OHLC, market cap, supply. Le mapping ticker→coin_id est intégré pour les 15 crypto les plus courantes (BTC, ETH, SOL, etc.).
+**coingecko** — CoinGecko pour les crypto-monnaies. Pas de clé API. Données OHLC via `/coins/{id}/ohlc` et **volume quotidien** via `/coins/{id}/market_chart` (les deux endpoints sont fusionnés automatiquement). Le mapping ticker→coin_id est intégré pour les 15 cryptos les plus courantes (BTC, ETH, SOL, ADA, DOGE, DOT, AVAX, MATIC, LINK, UNI, XRP, BNB, ATOM, LTC, NEAR). **Le routeur redirige automatiquement** les tickers crypto vers CoinGecko même si l'utilisateur sélectionne Yahoo ou Stooq, car ces providers retournent des données incorrectes pour les tickers crypto nus (ex. `yf.Ticker("BTC")` retourne un ETF/trust à ~$31, pas Bitcoin à ~$84,000).
 
 **ibkr** — Interactive Brokers via ib_insync. Nécessite TWS ou IB Gateway en local. Si la connexion échoue, le provider bascule sur les données sample.
+
+### Crypto — routage intelligent
+
+Le système détecte automatiquement les crypto-monnaies via deux fonctions centralisées dans `coingecko.py` :
+
+- `is_crypto_ticker(ticker)` — reconnaît les tickers directs (`BTC`, `ETH`, `SOL`…) et les paires Yahoo-style (`BTC-USD`, `ETH-EUR`…)
+- `normalize_crypto_ticker(ticker)` — normalise vers le ticker canonique : `BTC-USD` → `BTC`, `ETH-EUR` → `ETH`
+
+**Pourquoi ?** Sur Yahoo Finance, `yf.Ticker("BTC")` retourne les données du Grayscale Bitcoin Mini Trust (~$31), pas du Bitcoin réel (~$84,000). Stooq et Alpha Vantage ont le même problème avec les tickers crypto nus. CoinGecko est la seule source gratuite fiable pour les prix crypto OHLCV.
+
+**Mécanisme de redirection :**
+
+1. **Crypto guard** — Si un ticker crypto est détecté et que le provider demandé est `yahoo`, `stooq` ou `alpha_vantage`, le routeur redirige silencieusement vers CoinGecko (log info émis).
+2. **Auto-resolve** — En mode `auto`, les cryptos essaient CoinGecko en premier (puis Sample en fallback), tandis que les actions suivent la cascade Yahoo → Stooq → Alpha → Sample.
+3. **Normalisation globale** — `canonical_ticker()` est appliqué sur tous les endpoints API (`/chart/candlestick/{ticker}`, `/fair-value/{ticker}`, `/insights/{ticker}`, etc.) pour que la requête DB utilise toujours le même ticker que l'ETL a stocké.
+4. **Volume** — L'endpoint OHLC de CoinGecko ne fournit pas le volume. Le connecteur effectue un second appel à `/coins/{id}/market_chart?interval=daily` pour récupérer les volumes quotidiens et les fusionne par date (best effort, pas de blocage si ça échoue).
+5. **Frontend** — Le `CandlestickTab` détecte les tickers crypto côté client et route automatiquement vers CoinGecko. Un badge "Source : coingecko" s'affiche après le chargement avec le nombre de barres et le temps d'exécution. L'axe Y s'adapte dynamiquement aux grands prix (format `84k` au lieu de `84302.50`).
 
 ### Connecteurs de fondamentaux
 
@@ -337,10 +354,10 @@ Ce projet peut être présenté selon plusieurs angles selon le poste visé.
 
 **Backend / API Engineer** — Architecture FastAPI propre avec dependency injection, séparation en couches (connectors, services, API, schemas), configuration 12-factor par variables d'environnement, cache thread-safe, pipeline ETL structuré, 40 tests automatisés.
 
-**Data / ETL Engineer** — Pipeline bronze (extraction brute) → silver (nettoyage) → gold (features). 9 connecteurs open data avec cascade et fallback automatique. Batch processing. Routage de providers configurable.
+**Data / ETL Engineer** — Pipeline bronze (extraction brute) → silver (nettoyage) → gold (features). 9 connecteurs open data avec cascade et fallback automatique. Batch processing. Routage de providers configurable avec détection intelligente des cryptos et redirection automatique vers CoinGecko. Normalisation des tickers pour cohérence DB.
 
 **AI / LLM / RAG Engineer** — RAG vectoriel avec embeddings sentence-transformers, retrieval hybride (cosine + lexical), pipeline de chat avec citations. Abstraction LLM supportant 7 providers (cloud et locaux) avec détection automatique de disponibilité et changement à la volée.
 
 **Quant / Market Intelligence** — Moteur de détection de 14 signaux techniques sur chandeliers japonais. Modèle de juste valeur multifactoriel explicable. Score de confiance calibré. Niveaux pivot et support/résistance calculés.
 
-**Frontend / Fullstack** — Dashboard React avec 6 onglets, graphiques en chandeliers annotés (custom shapes Recharts), interface de chat RAG interactive, sélecteur de LLM avec feedback de disponibilité en temps réel.
+**Frontend / Fullstack** — Dashboard React avec 6 onglets, graphiques en chandeliers annotés (custom shapes Recharts), interface de chat RAG interactive, sélecteur de LLM avec feedback de disponibilité en temps réel. Formatage intelligent des prix (séparateurs de milliers, axe Y adaptatif pour les cryptos à 5+ chiffres). Détection automatique des tickers crypto côté client avec badge source visible.

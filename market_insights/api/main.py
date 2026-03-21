@@ -18,7 +18,7 @@ from market_insights.core.cache import cache_store
 from market_insights.core.config import settings
 from market_insights.db.bootstrap import init_db
 from market_insights.db.session import get_db
-from market_insights.etl.extractors.price_provider import PriceProviderRouter
+from market_insights.etl.extractors.price_provider import PriceProviderRouter, canonical_ticker
 from market_insights.schemas.market import FairValueResponse
 from market_insights.services.etl_service import run_batch_etl, run_etl
 from market_insights.services.hybrid_insight_service import HybridInsightService
@@ -138,7 +138,7 @@ def run_batch_pipeline(
     provider: str = Query("sample"),
     db: Session = Depends(get_db),
 ):
-    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    ticker_list = [canonical_ticker(t.strip()) for t in tickers.split(",") if t.strip()]
     if not ticker_list:
         raise HTTPException(status_code=400, detail="No tickers provided")
     return run_batch_etl(db, ticker_list, provider=provider)
@@ -149,6 +149,7 @@ def run_batch_pipeline(
 
 @app.get("/fair-value/{ticker}", response_model=FairValueResponse, tags=["analysis"])
 def fair_value(ticker: str, db: Session = Depends(get_db)):
+    ticker = canonical_ticker(ticker)
     try:
         return service.compute_fair_value(db, ticker)
     except ValueError as exc:
@@ -157,6 +158,7 @@ def fair_value(ticker: str, db: Session = Depends(get_db)):
 
 @app.get("/insights/{ticker}", tags=["analysis"])
 def insight(ticker: str, db: Session = Depends(get_db)):
+    ticker = canonical_ticker(ticker)
     try:
         return service.generate_insight(db, ticker)
     except ValueError as exc:
@@ -165,6 +167,7 @@ def insight(ticker: str, db: Session = Depends(get_db)):
 
 @app.get("/insights/{ticker}/comparable", tags=["analysis"])
 def comparable_insight(ticker: str, db: Session = Depends(get_db)):
+    ticker = canonical_ticker(ticker)
     try:
         full = service.generate_insight(db, ticker)
         return full.get("comparable", {})
@@ -174,6 +177,7 @@ def comparable_insight(ticker: str, db: Session = Depends(get_db)):
 
 @app.get("/insights/{ticker}/hybrid", tags=["analysis"])
 def hybrid_insight(ticker: str, db: Session = Depends(get_db)):
+    ticker = canonical_ticker(ticker)
     try:
         return hybrid_service.generate_hybrid_insight(db, ticker)
     except ValueError as exc:
@@ -186,6 +190,7 @@ def hybrid_insight(ticker: str, db: Session = Depends(get_db)):
 @app.get("/chart/candlestick/{ticker}", tags=["chart"])
 def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
     """Return OHLCV bars with per-bar signal annotations for chart rendering."""
+    ticker = canonical_ticker(ticker)
     try:
         from market_insights.analysis.candlestick_engine import annotate_candlesticks
 
@@ -223,16 +228,18 @@ def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
 
 @app.get("/rag/sources/{ticker}", tags=["rag"])
 def rag_sources(ticker: str, db: Session = Depends(get_db)):
-    return {"ticker": ticker.upper(), "sources": service.get_rag_sources(db, ticker)}
+    ticker = canonical_ticker(ticker)
+    return {"ticker": ticker, "sources": service.get_rag_sources(db, ticker)}
 
 
 @app.post("/rag/index/{ticker}", tags=["rag"])
 def rag_index(ticker: str, db: Session = Depends(get_db)):
     """Manually trigger RAG vector indexing for a ticker."""
+    ticker = canonical_ticker(ticker)
     from market_insights.rag.store import index_documents
 
     count = index_documents(db, ticker)
-    return {"ticker": ticker.upper(), "indexed_chunks": count}
+    return {"ticker": ticker, "indexed_chunks": count}
 
 
 @app.get("/rag/stats", tags=["rag"])
@@ -244,6 +251,7 @@ def rag_stats():
 
 @app.get("/fundamentals/{ticker}", tags=["data"])
 def fundamentals(ticker: str):
+    ticker = canonical_ticker(ticker)
     try:
         from market_insights.connectors.open_data.fundamentals import (
             MultiFundamentalsConnector,
@@ -261,6 +269,7 @@ def fundamentals(ticker: str):
 
 @app.get("/news/{ticker}", tags=["data"])
 def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
+    ticker = canonical_ticker(ticker)
     try:
         from market_insights.connectors.open_data.news import (
             MultiNewsConnector,

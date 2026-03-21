@@ -11,7 +11,12 @@ import { useAnalysis } from "./hooks/useAnalysis";
 
 const TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "JNJ", "BTC"];
 const TABS = ["overview", "chandeliers", "technique", "fondamentaux", "news", "rag chat"];
-const PROVIDERS = ["sample", "yahoo", "stooq", "alpha_vantage", "auto"];
+const PROVIDERS = ["sample", "yahoo", "coingecko", "stooq", "alpha_vantage", "auto"];
+
+const CRYPTO_SET = new Set(["BTC","ETH","SOL","ADA","DOGE","DOT","AVAX","MATIC","LINK","UNI","XRP","BNB","ATOM","LTC","NEAR"]);
+const fmtHeaderPrice = (v) => v >= 1000
+  ? v.toLocaleString("en-US", { maximumFractionDigits: 0 })
+  : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function App() {
   const [ticker, setTicker] = useState("AAPL");
@@ -59,7 +64,7 @@ export default function App() {
           <span className="ticker-sub">{tickerName}</span>
         </div>
         <div className="flex-row">
-          {price > 0 && <Num v={price.toFixed(2)} size="lg" prefix={ticker === "BTC" ? "" : "$"} />}
+          {price > 0 && <Num v={fmtHeaderPrice(price)} size="lg" prefix={CRYPTO_SET.has(ticker) ? "" : "$"} />}
           {upside !== 0 && (
             <Num v={`${upside > 0 ? "+" : ""}${upside.toFixed(2)}%`} size="sm" className={upside > 0 ? "text-green" : "text-red"} suffix=" FV" />
           )}

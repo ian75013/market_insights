@@ -6,14 +6,17 @@ import { getCandlestick, runEtl } from "../services/api";
 const POPULAR = [
   { label: "AAPL", desc: "Apple" }, { label: "MSFT", desc: "Microsoft" }, { label: "NVDA", desc: "Nvidia" },
   { label: "GOOGL", desc: "Alphabet" }, { label: "AMZN", desc: "Amazon" }, { label: "TSLA", desc: "Tesla" },
-  { label: "META", desc: "Meta" }, { label: "JPM", desc: "JPMorgan" }, { label: "BTC-USD", desc: "Bitcoin" }, { label: "EURUSD=X", desc: "EUR/USD" },
+  { label: "META", desc: "Meta" }, { label: "JPM", desc: "JPMorgan" }, { label: "BTC", desc: "Bitcoin" },
+  { label: "ETH", desc: "Ethereum" }, { label: "EURUSD=X", desc: "EUR/USD" },
 ];
 const PROVIDERS = [
-  { value: "yahoo", label: "Yahoo Finance" }, { value: "sample", label: "Sample" },
-  { value: "stooq", label: "Stooq" }, { value: "auto", label: "Auto" },
+  { value: "yahoo", label: "Yahoo Finance" }, { value: "coingecko", label: "CoinGecko (Crypto)" },
+  { value: "sample", label: "Sample" }, { value: "stooq", label: "Stooq" }, { value: "auto", label: "Auto" },
 ];
+const CRYPTO_TICKERS = new Set(["BTC","ETH","SOL","ADA","DOGE","DOT","AVAX","MATIC","LINK","UNI","XRP","BNB","ATOM","LTC","NEAR"]);
 
 const fmtDate = (d) => { if (!d) return ""; const p = d.slice(0,10).split("-"); return p.length >= 3 ? `${p[2]}/${p[1]}` : d.slice(5); };
+const fmtPrice = (v) => { if (v == null) return "—"; return v >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
 
 function CandleShape({ x, y, width, height, payload }) {
   if (!payload || !height) return null;
@@ -46,10 +49,10 @@ function CandleTooltip({ active, payload }) {
     <div className="chart-tooltip">
       <div className="muted text-xs" style={{ marginBottom: 6 }}>{fmtDate(d.date)}</div>
       <div className="tooltip-grid">
-        <span className="muted">O</span><span>{d.open}</span>
-        <span className="muted">H</span><span className="text-green">{d.high}</span>
-        <span className="muted">L</span><span className="text-red">{d.low}</span>
-        <span className="muted">C</span><span className={`fw-700 ${isUp?"text-green":"text-red"}`}>{d.close} ({chg}%)</span>
+        <span className="muted">O</span><span>{fmtPrice(d.open)}</span>
+        <span className="muted">H</span><span className="text-green">{fmtPrice(d.high)}</span>
+        <span className="muted">L</span><span className="text-red">{fmtPrice(d.low)}</span>
+        <span className="muted">C</span><span className={`fw-700 ${isUp?"text-green":"text-red"}`}>{fmtPrice(d.close)} ({chg}%)</span>
         <span className="muted">Vol</span><span>{d.volume>=1e6?(d.volume/1e6).toFixed(2)+"M":(d.volume/1e3).toFixed(0)+"K"}</span>
         {d.rsi_14!=null && <><span className="muted">RSI</span><span>{d.rsi_14}</span></>}
       </div>
@@ -75,6 +78,7 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
   const [error, setError] = useState(null);
   const [activeTicker, setActiveTicker] = useState("");
   const [filter, setFilter] = useState("all");
+  const [etlInfo, setEtlInfo] = useState(null);
 
   const cs = chartData || parentData?.candlestick;
   const comp = parentData?.comparable || parentData?.insight?.comparable;
@@ -82,11 +86,23 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
   const levels = comp?.levels || {};
   const summary = cs?.signal_summary || {};
 
+  // Detect crypto from ticker (strip -USD suffix)
+  const isCryptoTicker = (t) => CRYPTO_TICKERS.has(t.replace(/-.*/, "").toUpperCase());
+
   const loadChart = useCallback(async (ticker, prov) => {
     if (!ticker) return;
     const t = ticker.trim().toUpperCase();
-    setLoading(true); setError(null); setActiveTicker(t);
-    try { await runEtl(t, prov); setChartData(await getCandlestick(t)); }
+    // Auto-route crypto to coingecko — backend does it too, but this avoids confusion
+    const effectiveProv = (isCryptoTicker(t) && prov !== "sample") ? "coingecko" : prov;
+    setLoading(true); setError(null); setActiveTicker(t); setEtlInfo(null);
+    try {
+      const etlRes = await runEtl(t, effectiveProv);
+      setEtlInfo(etlRes);
+      // Backend may have normalized the ticker (BTC-USD → BTC)
+      const dbTicker = etlRes?.ticker || t;
+      setChartData(await getCandlestick(dbTicker));
+      setActiveTicker(dbTicker);
+    }
     catch (err) { setError(err.message); setChartData(null); }
     finally { setLoading(false); }
   }, []);
@@ -108,6 +124,10 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
   }, [filtered]);
   const displayTicker = cs?.ticker || activeTicker || parentTicker || "—";
   const barSize = Math.min(8, Math.max(3, 600 / Math.max(prepared.length, 1)));
+  const isCrypto = CRYPTO_TICKERS.has(displayTicker.replace(/-.*/, "").toUpperCase());
+  // Dynamic Y-axis width: 52px for stocks, wider for crypto with large prices
+  const yAxisWidth = yMax >= 10000 ? 72 : yMax >= 1000 ? 62 : 52;
+  const fmtYTick = (v) => v >= 10000 ? `${(v/1000).toFixed(0)}k` : v >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 0 }) : v.toFixed(2);
 
   return (
     <div className="flex-col">
@@ -129,6 +149,13 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
           ))}
         </div>
         {error && <div className="error-msg" style={{ marginTop: 8 }}>⚠ {error}</div>}
+        {etlInfo && !error && (
+          <div className="flex-row gap-xs" style={{ marginTop: 8 }}>
+            <span className="text-xs muted">Source :</span>
+            <Tag variant={etlInfo.provider === "coingecko" ? "accent" : ""}>{etlInfo.provider}</Tag>
+            <span className="text-xs muted">{etlInfo.loaded_rows} barres · {etlInfo.elapsed_seconds}s</span>
+          </div>
+        )}
       </Card>
 
       {bars.length > 0 ? (
@@ -145,13 +172,13 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
               <ResponsiveContainer width="100%" height={400}>
                 <ComposedChart data={prepared} margin={{ top:20,right:10,bottom:0,left:0 }}>
                   <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize:12, fill:"var(--muted)", fontFamily:"JetBrains Mono" }} interval={Math.max(1,Math.floor(prepared.length/12))} axisLine={{ stroke:"var(--border)" }} tickLine={false} />
-                  <YAxis domain={[yMin,yMax]} tick={{ fontSize:12, fill:"var(--muted)", fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} width={52} />
+                  <YAxis domain={[yMin,yMax]} tickFormatter={fmtYTick} tick={{ fontSize:12, fill:"var(--muted)", fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} width={yAxisWidth} />
                   <Tooltip content={<CandleTooltip />} />
                   <Bar dataKey="range" barSize={barSize} shape={<CandleShape />}>{prepared.map((_,i)=><Cell key={i} />)}</Bar>
                   <Line type="monotone" dataKey="sma_20" stroke="var(--amber)" strokeOpacity={0.65} strokeWidth={1.2} dot={false} strokeDasharray="4 2" />
                   <Line type="monotone" dataKey="sma_50" stroke="var(--red)" strokeOpacity={0.4} strokeWidth={1.2} dot={false} strokeDasharray="6 3" />
-                  {levels.support && <ReferenceLine y={levels.support} stroke="var(--green)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`S ${levels.support}`, position:"left", fill:"var(--green)", fontSize:11 }} />}
-                  {levels.resistance && <ReferenceLine y={levels.resistance} stroke="var(--red)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`R ${levels.resistance}`, position:"left", fill:"var(--red)", fontSize:11 }} />}
+                  {levels.support && <ReferenceLine y={levels.support} stroke="var(--green)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`S ${fmtPrice(levels.support)}`, position:"left", fill:"var(--green)", fontSize:11 }} />}
+                  {levels.resistance && <ReferenceLine y={levels.resistance} stroke="var(--red)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`R ${fmtPrice(levels.resistance)}`, position:"left", fill:"var(--red)", fontSize:11 }} />}
                 </ComposedChart>
               </ResponsiveContainer>
               <ResponsiveContainer width="100%" height={45}>
@@ -166,7 +193,7 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
                 <div className="flex-col gap-xs scroll-y" style={{ maxHeight: 220 }}>
                   {filtered.slice().reverse().map((s,i) => {
                     const cls = s.severity==="bullish"?"bull":s.severity==="bearish"?"bear":"neut";
-                    return <div key={i} className={`signal-item ${cls}`}><span className="mono text-xs muted" style={{ minWidth:48 }}>{fmtDate(s.date)}</span><span className="flex-1 text-sm">{s.label}</span><span className="mono text-xs muted">{s.close}</span></div>;
+                    return <div key={i} className={`signal-item ${cls}`}><span className="mono text-xs muted" style={{ minWidth:48 }}>{fmtDate(s.date)}</span><span className="flex-1 text-sm">{s.label}</span><span className="mono text-xs muted">{fmtPrice(s.close)}</span></div>;
                   })}
                 </div>
               </Card>
@@ -196,7 +223,7 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
               <Card delay={170}><Label>Niveaux</Label>
                 <div className="flex-col gap-xs">
                   {[{l:"Objectif 2",v:levels.target_2,c:"text-accent"},{l:"Résistance",v:levels.resistance,c:"text-red"},{l:"Pivot",v:levels.pivot,c:""},{l:"Support",v:levels.support,c:"text-green"}].filter(x=>x.v).map((lv,i) => (
-                    <div key={i} className="level-row"><span className="text-sm muted">{lv.l}</span><span className={`mono fw-600 ${lv.c}`}>{Number(lv.v).toFixed(2)}</span></div>
+                    <div key={i} className="level-row"><span className="text-sm muted">{lv.l}</span><span className={`mono fw-600 ${lv.c}`}>{fmtPrice(Number(lv.v))}</span></div>
                   ))}
                 </div>
               </Card>
