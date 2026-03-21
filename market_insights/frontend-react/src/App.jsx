@@ -1,6 +1,5 @@
-import { useState, useCallback } from "react";
-import { T } from "./styles/theme";
-import { Pill, VerdictBadge, Num, Tag, Skeleton } from "./components/ui";
+import { useState, useCallback, useEffect } from "react";
+import { Pill, VerdictBadge, Num, Tag, Skeleton, ThemeToggle } from "./components/ui";
 import { MacroRibbon } from "./components/MacroRibbon";
 import { OverviewTab } from "./components/OverviewTab";
 import { TechniqueTab } from "./components/TechniqueTab";
@@ -18,7 +17,15 @@ export default function App() {
   const [ticker, setTicker] = useState("AAPL");
   const [tab, setTab] = useState("overview");
   const [provider, setProvider] = useState("sample");
+  const [theme, setTheme] = useState(() => localStorage.getItem("mi-theme") || "dark");
   const { data, macro, loading, error, reload, runPipeline } = useAnalysis(ticker);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("mi-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
 
   const h = data?.hybrid;
   const fv = data?.fairValue;
@@ -30,117 +37,81 @@ export default function App() {
   const handleEtl = useCallback(() => runPipeline(provider), [runPipeline, provider]);
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: T.sans }}>
-      {/* ── Macro ribbon ─────────────────────────────────────── */}
+    <div className="app-shell">
       <MacroRibbon macro={macro} />
 
-      {/* ── Header ───────────────────────────────────────────── */}
-      <div style={{ padding: "12px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-          <span style={{ fontSize: 11, color: T.accent, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase" }}>Market Insights</span>
-          <span style={{ fontSize: 10, color: T.muted }}>v4.0 — RAG + LLM + Chandeliers</span>
+      {/* Header */}
+      <div className="header">
+        <div className="flex-row">
+          <span className="brand">Market Insights</span>
+          <span className="brand-sub">v4.0 — RAG + LLM + Chandeliers</span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
-        <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
-          {TICKERS.map((t) => (
-            <Pill key={t} active={t === ticker} onClick={() => setTicker(t)}>{t}</Pill>
-          ))}
+        <div className="flex-row gap-xs">
+          {TICKERS.map(t => <Pill key={t} active={t === ticker} onClick={() => setTicker(t)}>{t}</Pill>)}
         </div>
       </div>
 
-      {/* ── Ticker headline ──────────────────────────────────── */}
-      <div className="fade-up" style={{ padding: "14px 20px 4px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
-        <div>
-          <span style={{ fontSize: 24, fontWeight: 700 }}>{ticker}</span>
-          <span style={{ fontSize: 13, color: T.muted, marginLeft: 8 }}>{tickerName}</span>
+      {/* Ticker headline */}
+      <div className="header fade-up">
+        <div className="flex-row">
+          <span className="ticker-name">{ticker}</span>
+          <span className="ticker-sub">{tickerName}</span>
         </div>
-        {price > 0 && (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <Num v={price.toFixed(2)} size={28} prefix={ticker === "BTC" ? "" : "$"} />
-            {upside !== 0 && <Num v={`${upside > 0 ? "+" : ""}${upside.toFixed(2)}`} suffix="% FV" size={13} color={upside > 0 ? T.green : T.red} />}
-          </div>
-        )}
-        {h && <VerdictBadge verdict={verdict} />}
-        {data?.fundamentals?.sector && <Tag color={T.accent}>{data.fundamentals.sector}</Tag>}
+        <div className="flex-row">
+          {price > 0 && <Num v={price.toFixed(2)} size="lg" prefix={ticker === "BTC" ? "" : "$"} />}
+          {upside !== 0 && (
+            <Num v={`${upside > 0 ? "+" : ""}${upside.toFixed(2)}%`} size="sm" className={upside > 0 ? "text-green" : "text-red"} suffix=" FV" />
+          )}
+          {h && <VerdictBadge verdict={verdict} />}
+          {data?.fundamentals?.sector && <Tag variant="accent">{data.fundamentals.sector}</Tag>}
+        </div>
       </div>
 
-      {/* ── Controls ─────────────────────────────────────────── */}
-      <div style={{ padding: "8px 20px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <select value={provider} onChange={(e) => setProvider(e.target.value)} style={{
-          padding: "5px 10px", borderRadius: 6, border: `1px solid ${T.border}`,
-          background: T.panel2, color: T.text, fontSize: 11, fontFamily: T.sans,
-        }}>
-          {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+      {/* Controls */}
+      <div className="controls">
+        <select className="select" value={provider} onChange={e => setProvider(e.target.value)}>
+          {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <button onClick={handleEtl} disabled={loading} style={{
-          padding: "5px 14px", borderRadius: 6, border: "none",
-          background: `linear-gradient(135deg, #1d4ed8, #0891b2)`, color: "#fff",
-          fontSize: 11, fontWeight: 700, cursor: loading ? "wait" : "pointer",
-          opacity: loading ? 0.6 : 1, fontFamily: T.sans,
-        }}>{loading ? "Chargement…" : "Lancer ETL + Recharger"}</button>
-        <button onClick={reload} disabled={loading} style={{
-          padding: "5px 14px", borderRadius: 6, border: `1px solid ${T.border}`,
-          background: T.panel2, color: T.text, fontSize: 11, fontWeight: 600,
-          cursor: "pointer", fontFamily: T.sans,
-        }}>Recharger</button>
-        {error && <span style={{ fontSize: 11, color: T.red }}>⚠ {error}</span>}
-        {loading && <span style={{ fontSize: 11, color: T.amber, animation: "pulse 1.5s infinite" }}>Chargement…</span>}
+        <button className="btn btn-primary" onClick={handleEtl} disabled={loading}>
+          {loading ? "Chargement…" : "Lancer ETL + Recharger"}
+        </button>
+        <button className="btn btn-secondary" onClick={reload} disabled={loading}>Recharger</button>
+        {error && <span className="error-msg">⚠ {error}</span>}
+        {loading && <span className="loading-pulse">Chargement…</span>}
       </div>
 
-      {/* ── Tab bar ──────────────────────────────────────────── */}
-      <div style={{ padding: "0 20px", display: "flex", gap: 2, borderBottom: `1px solid ${T.border}`, marginBottom: 14, overflowX: "auto" }}>
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: "8px 16px", fontSize: 12, fontWeight: 600, fontFamily: T.sans,
-            background: "transparent", border: "none",
-            borderBottom: `2px solid ${tab === t ? T.accent : "transparent"}`,
-            color: tab === t ? T.text : T.muted, cursor: "pointer", transition: "all .15s",
-            whiteSpace: "nowrap",
-          }}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
+      {/* Tabs */}
+      <div className="tab-bar">
+        {TABS.map(t => (
+          <button key={t} className={`tab-btn ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
         ))}
       </div>
 
-      {/* ── Content ──────────────────────────────────────────── */}
-      <div style={{ padding: "0 20px 30px" }}>
+      {/* Content */}
+      <div className="page-pad">
         {loading && !data ? (
-          <LoadingSkeleton />
-        ) : (
-          <>
-            {tab === "overview" && <OverviewTab data={data} />}
-            {tab === "chandeliers" && <CandlestickTab data={data} />}
-            {tab === "technique" && <TechniqueTab data={data} />}
-            {tab === "fondamentaux" && <FondamentauxTab data={data} />}
-            {tab === "news" && <NewsTab data={data} macro={macro} />}
-            {tab === "rag chat" && <RagChatTab ticker={ticker} />}
-          </>
-        )}
+          <div className="grid-sidebar">
+            <div className="flex-col">
+              <div className="grid-4">{[1,2,3,4].map(i => <Skeleton key={i} height={70} />)}</div>
+              <Skeleton height={200} /><Skeleton height={120} />
+            </div>
+            <div className="flex-col"><Skeleton height={140} /><Skeleton height={160} /><Skeleton height={100} /></div>
+          </div>
+        ) : (<>
+          {tab === "overview" && <OverviewTab data={data} />}
+          {tab === "chandeliers" && <CandlestickTab data={data} ticker={ticker} />}
+          {tab === "technique" && <TechniqueTab data={data} />}
+          {tab === "fondamentaux" && <FondamentauxTab data={data} />}
+          {tab === "news" && <NewsTab data={data} macro={macro} />}
+          {tab === "rag chat" && <RagChatTab ticker={ticker} />}
+        </>)}
       </div>
 
-      {/* ── Footer ───────────────────────────────────────────── */}
-      <div style={{
-        padding: "12px 20px", borderTop: `1px solid ${T.border}`, fontSize: 10,
-        color: T.muted, textAlign: "center", fontFamily: T.mono,
-      }}>
-        Analyse générée automatiquement à titre informatif · Ne constitue pas un conseil en investissement
-        · Market Insights v4.0 — RAG vectoriel · 7 LLM providers · Chandeliers annotés · 40 tests
-      </div>
-    </div>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 14 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} height={70} />)}
-        </div>
-        <Skeleton height={200} />
-        <Skeleton height={120} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Skeleton height={140} />
-        <Skeleton height={160} />
-        <Skeleton height={100} />
+      <div className="footer">
+        Analyse générée automatiquement à titre informatif · Ne constitue pas un conseil en investissement · Market Insights v4.0
       </div>
     </div>
   );

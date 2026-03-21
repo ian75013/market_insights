@@ -1,5 +1,5 @@
-from market_insights.connectors.open_data.prices import SamplePriceConnector
 from market_insights.connectors.ibkr.historical import IBHistoricalFetcher
+from market_insights.connectors.open_data.prices import SamplePriceConnector
 
 
 def test_sample_price_connector_returns_rows():

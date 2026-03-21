@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-
 PRICE_COLS = ["open", "high", "low", "close", "volume"]
 
 

@@ -1,79 +1,64 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { ComposedChart, XAxis, YAxis, Tooltip, ResponsiveContainer, Bar, Cell, Line, ReferenceLine, ReferenceArea } from "recharts";
-import { T } from "../styles/theme";
+import { useState, useMemo, useCallback } from "react";
+import { ComposedChart, XAxis, YAxis, Tooltip, ResponsiveContainer, Bar, Cell, Line, ReferenceLine } from "recharts";
 import { Card, Label, Tag } from "./ui";
+import { getCandlestick, runEtl } from "../services/api";
 
-/* ── Custom candlestick shape for recharts ───────────────────────── */
+const POPULAR = [
+  { label: "AAPL", desc: "Apple" }, { label: "MSFT", desc: "Microsoft" }, { label: "NVDA", desc: "Nvidia" },
+  { label: "GOOGL", desc: "Alphabet" }, { label: "AMZN", desc: "Amazon" }, { label: "TSLA", desc: "Tesla" },
+  { label: "META", desc: "Meta" }, { label: "JPM", desc: "JPMorgan" }, { label: "BTC-USD", desc: "Bitcoin" }, { label: "EURUSD=X", desc: "EUR/USD" },
+];
+const PROVIDERS = [
+  { value: "yahoo", label: "Yahoo Finance" }, { value: "sample", label: "Sample" },
+  { value: "stooq", label: "Stooq" }, { value: "auto", label: "Auto" },
+];
+
+const fmtDate = (d) => { if (!d) return ""; const p = d.slice(0,10).split("-"); return p.length >= 3 ? `${p[2]}/${p[1]}` : d.slice(5); };
+
 function CandleShape({ x, y, width, height, payload }) {
-  if (!payload) return null;
+  if (!payload || !height) return null;
   const { open, high, low, close } = payload;
   const isUp = close >= open;
-  const color = isUp ? T.green : T.red;
-  const bodyTop = Math.min(open, close);
-  const bodyBot = Math.max(open, close);
-  const hasSignal = payload.signals?.length > 0;
-
-  // scale from data coords to pixel coords
-  // recharts passes y/height for the bar, we compute from the low-high range
-  const barW = Math.max(width * 0.7, 3);
+  const color = isUp ? "var(--green)" : "var(--red)";
+  const barW = Math.max(width * 0.65, 2);
   const cx = x + width / 2;
-
+  const range = Math.max(high - low, 0.001);
+  const bodyTop = y + height * ((high - Math.max(open, close)) / range);
+  const bodyBot = y + height * ((high - Math.min(open, close)) / range);
+  const bodyH = Math.max(bodyBot - bodyTop, 0.5);
+  const hasSig = payload.signals?.length > 0;
+  const sigColor = hasSig ? (payload.signals[0]?.severity === "bullish" ? "var(--green)" : payload.signals[0]?.severity === "bearish" ? "var(--red)" : "var(--amber)") : null;
   return (
     <g>
-      {/* Wick */}
-      <line x1={cx} x2={cx} y1={y} y2={y + height} stroke={color} strokeWidth={1} />
-      {/* Body */}
-      <rect
-        x={cx - barW / 2}
-        width={barW}
-        y={y + height * ((high - bodyBot) / Math.max(high - low, 0.01))}
-        height={Math.max(height * (Math.abs(close - open) / Math.max(high - low, 0.01)), 1)}
-        fill={isUp ? color : color}
-        fillOpacity={isUp ? 0.3 : 0.8}
-        stroke={color}
-        strokeWidth={0.8}
-        rx={1}
-      />
-      {/* Signal dot */}
-      {hasSignal && (
-        <circle
-          cx={cx}
-          cy={y - 6}
-          r={3}
-          fill={payload.signals[0]?.severity === "bullish" ? T.green : payload.signals[0]?.severity === "bearish" ? T.red : T.amber}
-        />
-      )}
+      <line x1={cx} x2={cx} y1={y} y2={y+height} stroke={color} strokeOpacity={0.5} strokeWidth={0.8} />
+      <rect x={cx-barW/2} width={barW} y={bodyTop} height={bodyH} fill={isUp ? "var(--candle-up-fill,var(--bg))" : color} stroke={color} strokeWidth={0.8} rx={0.5} />
+      {hasSig && <polygon points={`${cx},${y-8} ${cx-3},${y-3} ${cx+3},${y-3}`} fill={sigColor} fillOpacity={0.85} />}
     </g>
   );
 }
 
-/* ── Custom tooltip ──────────────────────────────────────────────── */
-function CandleTooltip({ active, payload, label }) {
+function CandleTooltip({ active, payload }) {
   if (!active || !payload?.[0]) return null;
   const d = payload[0].payload;
   const isUp = d.close >= d.open;
+  const chg = d.close && d.open ? ((d.close-d.open)/d.open*100).toFixed(2) : "0.00";
   return (
-    <div style={{
-      background: T.panel2, border: `1px solid ${T.border}`, borderRadius: 8,
-      padding: "10px 14px", fontSize: 11, fontFamily: T.mono, minWidth: 200,
-    }}>
-      <div style={{ color: T.muted, marginBottom: 6 }}>{d.date}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px" }}>
-        <span style={{ color: T.muted }}>Open</span><span>{d.open}</span>
-        <span style={{ color: T.muted }}>High</span><span>{d.high}</span>
-        <span style={{ color: T.muted }}>Low</span><span>{d.low}</span>
-        <span style={{ color: T.muted }}>Close</span><span style={{ color: isUp ? T.green : T.red, fontWeight: 600 }}>{d.close}</span>
-        <span style={{ color: T.muted }}>Volume</span><span>{(d.volume / 1000).toFixed(0)}K</span>
-        {d.rsi_14 && <><span style={{ color: T.muted }}>RSI</span><span>{d.rsi_14}</span></>}
+    <div className="chart-tooltip">
+      <div className="muted text-xs" style={{ marginBottom: 6 }}>{fmtDate(d.date)}</div>
+      <div className="tooltip-grid">
+        <span className="muted">O</span><span>{d.open}</span>
+        <span className="muted">H</span><span className="text-green">{d.high}</span>
+        <span className="muted">L</span><span className="text-red">{d.low}</span>
+        <span className="muted">C</span><span className={`fw-700 ${isUp?"text-green":"text-red"}`}>{d.close} ({chg}%)</span>
+        <span className="muted">Vol</span><span>{d.volume>=1e6?(d.volume/1e6).toFixed(2)+"M":(d.volume/1e3).toFixed(0)+"K"}</span>
+        {d.rsi_14!=null && <><span className="muted">RSI</span><span>{d.rsi_14}</span></>}
       </div>
       {d.signals?.length > 0 && (
-        <div style={{ marginTop: 8, borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>
-          {d.signals.map((s, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%",
-                background: s.severity === "bullish" ? T.green : s.severity === "bearish" ? T.red : T.amber
-              }} />
-              <span style={{ fontSize: 10 }}>{s.label}</span>
+        <div style={{ marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+          {d.signals.map((s,i) => (
+            <div key={i} className="flex-row gap-xs" style={{ marginTop: 2 }}>
+              <span className="provider-dot" style={{ background: s.severity==="bullish"?"var(--green)":s.severity==="bearish"?"var(--red)":"var(--amber)", width:5, height:5 }} />
+              <span className="text-xs">{s.label}</span>
             </div>
           ))}
         </div>
@@ -82,209 +67,152 @@ function CandleTooltip({ active, payload, label }) {
   );
 }
 
-/* ── Signal severity colors ──────────────────────────────────────── */
-const SEV = { bullish: T.green, bearish: T.red, neutral: T.amber };
-
-export function CandlestickTab({ data }) {
-  const cs = data?.candlestick;
-  const comp = data?.comparable || data?.insight?.comparable;
+export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
+  const [customTicker, setCustomTicker] = useState("");
+  const [provider, setProvider] = useState("yahoo");
+  const [chartData, setChartData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [activeTicker, setActiveTicker] = useState("");
   const [filter, setFilter] = useState("all");
 
-  if (!cs?.bars?.length) {
-    return (
-      <Card>
-        <div style={{ textAlign: "center", padding: 40, color: T.muted }}>
-          Aucune donnée chandelier. Lancez l'ETL pour ce ticker.
-        </div>
-      </Card>
-    );
-  }
-
-  const bars = cs.bars;
+  const cs = chartData || parentData?.candlestick;
+  const comp = parentData?.comparable || parentData?.insight?.comparable;
+  const bars = cs?.bars || [];
   const levels = comp?.levels || {};
-  const summary = cs.signal_summary || {};
+  const summary = cs?.signal_summary || {};
 
-  /* ── Prepare data: add range column for recharts bar ─────────── */
-  const chartData = useMemo(() =>
-    bars.map(b => ({
-      ...b,
-      range: [b.low, b.high],
-      bodyRange: [Math.min(b.open, b.close), Math.max(b.open, b.close)],
-    })),
-    [bars]
-  );
+  const loadChart = useCallback(async (ticker, prov) => {
+    if (!ticker) return;
+    const t = ticker.trim().toUpperCase();
+    setLoading(true); setError(null); setActiveTicker(t);
+    try { await runEtl(t, prov); setChartData(await getCandlestick(t)); }
+    catch (err) { setError(err.message); setChartData(null); }
+    finally { setLoading(false); }
+  }, []);
 
-  /* ── Filter signals ─────────────────────────────────────────── */
-  const recentSignals = useMemo(() => {
-    const all = [];
-    bars.forEach(b => b.signals?.forEach(s => all.push({ ...s, date: b.date, close: b.close })));
-    if (filter === "all") return all;
-    return all.filter(s => s.severity === filter);
-  }, [bars, filter]);
+  const handleSubmit = (e) => { e?.preventDefault(); loadChart(customTicker || parentTicker, provider); };
+  const handleQuick = (t) => { setCustomTicker(t); loadChart(t, provider); };
 
-  /* ── Signal type counts ─────────────────────────────────────── */
+  const prepared = useMemo(() => bars.map(b => ({ ...b, range: [b.low, b.high] })), [bars]);
+  const [yMin, yMax] = useMemo(() => {
+    if (!bars.length) return [0, 100];
+    const lo = Math.min(...bars.map(b=>b.low)); const hi = Math.max(...bars.map(b=>b.high));
+    const pad = (hi-lo)*0.04; return [+(lo-pad).toFixed(2), +(hi+pad).toFixed(2)];
+  }, [bars]);
+
+  const allSignals = useMemo(() => { const o=[]; bars.forEach(b=>b.signals?.forEach(s=>o.push({...s,date:b.date,close:b.close}))); return o; }, [bars]);
+  const filtered = useMemo(() => filter==="all" ? allSignals : allSignals.filter(s=>s.severity===filter), [allSignals,filter]);
   const typeCounts = useMemo(() => {
-    const counts = {};
-    recentSignals.forEach(s => { counts[s.type] = (counts[s.type] || 0) + 1; });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [recentSignals]);
+    const c={}; filtered.forEach(s=>{c[s.type]=(c[s.type]||0)+1}); return Object.entries(c).sort((a,b)=>b[1]-a[1]);
+  }, [filtered]);
+  const displayTicker = cs?.ticker || activeTicker || parentTicker || "—";
+  const barSize = Math.min(8, Math.max(3, 600 / Math.max(prepared.length, 1)));
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 14 }}>
-      {/* ── Left: Chart ───────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Card delay={0}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Label>Chandeliers Japonais — {cs.ticker}</Label>
-            <div style={{ display: "flex", gap: 10, fontSize: 10, fontFamily: T.mono }}>
-              <span style={{ color: T.green }}>● Haussier</span>
-              <span style={{ color: T.red }}>● Baissier</span>
-              <span style={{ color: "#f5a623" }}>┄ SMA 20</span>
-              <span style={{ color: "#ff4d6a88" }}>┄ SMA 50</span>
-            </div>
-          </div>
+    <div className="flex-col">
+      {/* Input bar */}
+      <Card delay={0}>
+        <form onSubmit={handleSubmit} className="flex-row">
+          <Label>Charger un graphique</Label>
+          <input className="input input-mono flex-1" value={customTicker} onChange={e=>setCustomTicker(e.target.value.toUpperCase())} placeholder="Ticker (AAPL, TSLA, BTC-USD...)" style={{ minWidth: 140 }} />
+          <select className="select" value={provider} onChange={e=>setProvider(e.target.value)}>
+            {PROVIDERS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          <button type="submit" className="btn btn-primary" disabled={loading}>{loading?"Chargement…":"Charger"}</button>
+        </form>
+        <div className="flex-row gap-xs" style={{ marginTop: 10 }}>
+          {POPULAR.map(p => (
+            <button key={p.label} className={`quick-pick ${activeTicker===p.label?"active":""}`} onClick={()=>handleQuick(p.label)} disabled={loading}>
+              {p.label} <span className="muted" style={{ fontWeight: 400 }}>{p.desc}</span>
+            </button>
+          ))}
+        </div>
+        {error && <div className="error-msg" style={{ marginTop: 8 }}>⚠ {error}</div>}
+      </Card>
 
-          <ResponsiveContainer width="100%" height={380}>
-            <ComposedChart data={chartData} margin={{ top: 16, right: 10, bottom: 0, left: 0 }}>
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }}
-                tickFormatter={d => d?.slice(5) || ""}
-                interval={Math.max(1, Math.floor(chartData.length / 10))}
-                axisLine={{ stroke: T.border }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={["auto", "auto"]}
-                tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }}
-                axisLine={false}
-                tickLine={false}
-                width={52}
-              />
-              <Tooltip content={<CandleTooltip />} />
-
-              {/* Candle bodies as bars */}
-              <Bar dataKey="range" barSize={6} shape={<CandleShape />}>
-                {chartData.map((e, i) => (
-                  <Cell key={i} fill={e.close >= e.open ? T.green : T.red} />
-                ))}
-              </Bar>
-
-              {/* SMA overlays */}
-              <Line type="monotone" dataKey="sma_20" stroke="#f5a62388" strokeWidth={1.2} dot={false} strokeDasharray="4 2" />
-              <Line type="monotone" dataKey="sma_50" stroke="#ff4d6a66" strokeWidth={1.2} dot={false} strokeDasharray="6 3" />
-
-              {/* Support / Resistance */}
-              {levels.support && <ReferenceLine y={levels.support} stroke={T.green} strokeDasharray="3 3" strokeWidth={0.8} label={{ value: `S ${levels.support}`, position: "left", fill: T.green, fontSize: 9 }} />}
-              {levels.resistance && <ReferenceLine y={levels.resistance} stroke={T.red} strokeDasharray="3 3" strokeWidth={0.8} label={{ value: `R ${levels.resistance}`, position: "left", fill: T.red, fontSize: 9 }} />}
-            </ComposedChart>
-          </ResponsiveContainer>
-
-          {/* Volume bars below */}
-          <ResponsiveContainer width="100%" height={50}>
-            <ComposedChart data={chartData} margin={{ top: 0, right: 10, bottom: 0, left: 0 }}>
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
-              <Bar dataKey="volume" barSize={5} radius={[1, 1, 0, 0]}>
-                {chartData.map((e, i) => (
-                  <Cell key={i} fill={e.close >= e.open ? T.green + "33" : T.red + "33"} />
-                ))}
-              </Bar>
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Signal timeline */}
-        <Card delay={200}>
-          <Label>Chronologie des signaux ({recentSignals.length})</Label>
-          <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-            {recentSignals.slice(-30).reverse().map((s, i) => (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "6px 10px", background: T.panel2, borderRadius: 6,
-                borderLeft: `3px solid ${SEV[s.severity] || T.muted}`,
-              }}>
-                <span style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, minWidth: 72 }}>{s.date?.slice(5)}</span>
-                <span style={{ fontSize: 11, flex: 1 }}>{s.label}</span>
-                <Tag color={SEV[s.severity]}>{s.type}</Tag>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Right: Sidebar ────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Signal summary */}
-        <Card delay={60}>
-          <Label>Résumé Signaux</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
-            {[
-              { l: "Bullish", v: summary.bullish || 0, c: T.green },
-              { l: "Bearish", v: summary.bearish || 0, c: T.red },
-              { l: "Neutral", v: summary.neutral || 0, c: T.amber },
-            ].map((s, i) => (
-              <div key={i} style={{
-                textAlign: "center", padding: "10px 6px", borderRadius: 6,
-                background: s.c + "10", border: `1px solid ${s.c}25`,
-              }}>
-                <div style={{ fontFamily: T.mono, fontSize: 22, fontWeight: 700, color: s.c }}>{s.v}</div>
-                <div style={{ fontSize: 9, color: T.muted }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Filter */}
-        <Card delay={120}>
-          <Label>Filtre</Label>
-          <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-            {["all", "bullish", "bearish", "neutral"].map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                padding: "4px 10px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                background: filter === f ? (f === "all" ? T.accent : SEV[f]) + "22" : "transparent",
-                color: filter === f ? (f === "all" ? T.accent : SEV[f]) : T.muted,
-                border: `1px solid ${filter === f ? (f === "all" ? T.accent : SEV[f]) + "55" : T.border}`,
-                cursor: "pointer",
-              }}>{f === "all" ? "Tous" : f.charAt(0).toUpperCase() + f.slice(1)}</button>
-            ))}
-          </div>
-        </Card>
-
-        {/* Pattern frequency */}
-        <Card delay={180}>
-          <Label>Patterns détectés</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-            {typeCounts.slice(0, 10).map(([type, count], i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px", background: T.panel2, borderRadius: 5 }}>
-                <span style={{ fontSize: 11 }}>{type.replace(/_/g, " ")}</span>
-                <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: T.accent }}>{count}</span>
-              </div>
-            ))}
-            {typeCounts.length === 0 && <div style={{ fontSize: 11, color: T.muted }}>Aucun pattern</div>}
-          </div>
-        </Card>
-
-        {/* Niveaux */}
-        {levels.support && (
-          <Card delay={240}>
-            <Label>Niveaux clés</Label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-              {[
-                { l: "Objectif 2", v: levels.target_2, c: T.accent },
-                { l: "Résistance", v: levels.resistance, c: T.red },
-                { l: "Pivot", v: levels.pivot, c: T.text },
-                { l: "Support", v: levels.support, c: T.green },
-              ].filter(x => x.v).map((lv, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 8px", background: T.panel2, borderRadius: 4 }}>
-                  <span style={{ fontSize: 10, color: T.muted }}>{lv.l}</span>
-                  <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 600, color: lv.c }}>{Number(lv.v).toFixed(2)}</span>
+      {bars.length > 0 ? (
+        <div className="grid-sidebar">
+          <div className="flex-col">
+            <Card delay={50}>
+              <div className="card-header">
+                <span className="text-base fw-600">{displayTicker} — {bars.length} séances <span className="muted text-xs" style={{ marginLeft: 8 }}>{fmtDate(bars[0].date)} → {fmtDate(bars[bars.length-1].date)}</span></span>
+                <div className="flex-row gap-sm mono text-xs">
+                  <span className="text-green">▲ Bull</span><span className="text-red">▲ Bear</span>
+                  <span className="text-amber">┄ SMA20</span><span style={{ color: "var(--red)", opacity: .5 }}>┄ SMA50</span>
                 </div>
-              ))}
-            </div>
-          </Card>
-        )}
-      </div>
+              </div>
+              <ResponsiveContainer width="100%" height={400}>
+                <ComposedChart data={prepared} margin={{ top:20,right:10,bottom:0,left:0 }}>
+                  <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize:12, fill:"var(--muted)", fontFamily:"JetBrains Mono" }} interval={Math.max(1,Math.floor(prepared.length/12))} axisLine={{ stroke:"var(--border)" }} tickLine={false} />
+                  <YAxis domain={[yMin,yMax]} tick={{ fontSize:12, fill:"var(--muted)", fontFamily:"JetBrains Mono" }} axisLine={false} tickLine={false} width={52} />
+                  <Tooltip content={<CandleTooltip />} />
+                  <Bar dataKey="range" barSize={barSize} shape={<CandleShape />}>{prepared.map((_,i)=><Cell key={i} />)}</Bar>
+                  <Line type="monotone" dataKey="sma_20" stroke="var(--amber)" strokeOpacity={0.65} strokeWidth={1.2} dot={false} strokeDasharray="4 2" />
+                  <Line type="monotone" dataKey="sma_50" stroke="var(--red)" strokeOpacity={0.4} strokeWidth={1.2} dot={false} strokeDasharray="6 3" />
+                  {levels.support && <ReferenceLine y={levels.support} stroke="var(--green)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`S ${levels.support}`, position:"left", fill:"var(--green)", fontSize:11 }} />}
+                  {levels.resistance && <ReferenceLine y={levels.resistance} stroke="var(--red)" strokeOpacity={0.4} strokeDasharray="3 3" strokeWidth={0.7} label={{ value:`R ${levels.resistance}`, position:"left", fill:"var(--red)", fontSize:11 }} />}
+                </ComposedChart>
+              </ResponsiveContainer>
+              <ResponsiveContainer width="100%" height={45}>
+                <ComposedChart data={prepared} margin={{ top:0,right:10,bottom:0,left:0 }}>
+                  <XAxis dataKey="date" hide /><YAxis hide />
+                  <Bar dataKey="volume" barSize={Math.max(2,barSize-2)} radius={[1,1,0,0]}>{prepared.map((e,i)=><Cell key={i} fill={e.close>=e.open?"rgba(0,214,126,.2)":"rgba(255,77,106,.2)"} />)}</Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Card>
+            {filtered.length > 0 && (
+              <Card delay={150}><Label>Signaux ({filtered.length})</Label>
+                <div className="flex-col gap-xs scroll-y" style={{ maxHeight: 220 }}>
+                  {filtered.slice().reverse().map((s,i) => {
+                    const cls = s.severity==="bullish"?"bull":s.severity==="bearish"?"bear":"neut";
+                    return <div key={i} className={`signal-item ${cls}`}><span className="mono text-xs muted" style={{ minWidth:48 }}>{fmtDate(s.date)}</span><span className="flex-1 text-sm">{s.label}</span><span className="mono text-xs muted">{s.close}</span></div>;
+                  })}
+                </div>
+              </Card>
+            )}
+          </div>
+          <div className="flex-col">
+            <Card delay={80}><Label>Résumé</Label>
+              <div className="grid-3 gap-xs">
+                {[{l:"Bull",v:summary.bullish||0,c:"text-green"},{l:"Bear",v:summary.bearish||0,c:"text-red"},{l:"Neutre",v:summary.neutral||0,c:"text-amber"}].map((s,i) => (
+                  <div key={i} className="metric-box metric-box-center"><div className={`num num-md ${s.c}`}>{s.v}</div><div className="text-xs muted">{s.l}</div></div>
+                ))}
+              </div>
+            </Card>
+            <Card delay={110}><Label>Filtre</Label>
+              <div className="flex-row gap-xs">
+                {["all","bullish","bearish","neutral"].map(f => (
+                  <button key={f} className={`quick-pick ${filter===f?"active":""}`} onClick={()=>setFilter(f)}>{f==="all"?"Tous":f.charAt(0).toUpperCase()+f.slice(1)}</button>
+                ))}
+              </div>
+            </Card>
+            <Card delay={140}><Label>Patterns</Label>
+              <div className="flex-col gap-xs">{typeCounts.length===0 && <span className="text-sm muted">Aucun signal</span>}
+                {typeCounts.map(([type,count],i) => <div key={i} className="level-row"><span className="text-sm">{type.replace(/_/g," ")}</span><span className="mono fw-600 text-accent">{count}</span></div>)}
+              </div>
+            </Card>
+            {levels.support && (
+              <Card delay={170}><Label>Niveaux</Label>
+                <div className="flex-col gap-xs">
+                  {[{l:"Objectif 2",v:levels.target_2,c:"text-accent"},{l:"Résistance",v:levels.resistance,c:"text-red"},{l:"Pivot",v:levels.pivot,c:""},{l:"Support",v:levels.support,c:"text-green"}].filter(x=>x.v).map((lv,i) => (
+                    <div key={i} className="level-row"><span className="text-sm muted">{lv.l}</span><span className={`mono fw-600 ${lv.c}`}>{Number(lv.v).toFixed(2)}</span></div>
+                  ))}
+                </div>
+              </Card>
+            )}
+            <Card delay={200}><Label>Légende</Label>
+              <div className="text-xs muted lh-relaxed">
+                <div><span className="text-green">▲</span> Haussier (gap up, breakout, marteau, golden cross)</div>
+                <div><span className="text-red">▲</span> Baissier (gap down, breakdown, étoile filante, death cross)</div>
+                <div><span className="text-amber">▲</span> Neutre (pullback, doji, volume spike)</div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : !loading && (
+        <Card><div className="empty-state"><h3>Saisissez un ticker et cliquez Charger</h3><p>Les données seront récupérées puis affichées en chandeliers annotés.</p></div></Card>
+      )}
     </div>
   );
 }

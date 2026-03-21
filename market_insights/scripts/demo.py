@@ -3,7 +3,6 @@ from market_insights.db.session import SessionLocal
 from market_insights.services.etl_service import run_etl
 from market_insights.services.market_service import MarketInsightService
 
-
 if __name__ == "__main__":
     init_db()
     db = SessionLocal()

@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from market_insights.core.config import settings
-from market_insights.llm.providers import get_llm, LLMResponse
+from market_insights.llm.providers import LLMResponse, get_llm
 from market_insights.rag.store import retrieve_context
 
 logger = logging.getLogger(__name__)

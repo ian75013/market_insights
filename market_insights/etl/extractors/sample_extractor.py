@@ -1,6 +1,6 @@
 from pathlib import Path
-import pandas as pd
 
+import pandas as pd
 
 DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "sample" / "prices.csv"
 

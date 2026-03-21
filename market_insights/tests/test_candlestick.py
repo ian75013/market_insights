@@ -1,6 +1,7 @@
 """Tests for candlestick annotation engine."""
 
 import pandas as pd
+
 from market_insights.analysis.candlestick_engine import annotate_candlesticks
 
 

@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+
 from market_insights.api.main import app
 
 client = TestClient(app)

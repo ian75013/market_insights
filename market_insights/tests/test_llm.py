@@ -1,6 +1,6 @@
 """Tests for LLM provider abstraction."""
 
-from market_insights.llm.providers import get_llm, list_providers, FallbackProvider
+from market_insights.llm.providers import FallbackProvider, get_llm, list_providers
 
 
 def test_fallback_always_available():

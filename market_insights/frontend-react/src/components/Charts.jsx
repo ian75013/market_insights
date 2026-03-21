@@ -24,7 +24,7 @@ export function PriceChart({ data, support, resistance, showSma = true, height =
 
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }}
+          tick={{ fontSize: 12, fill: T.muted, fontFamily: T.mono }}
           tickFormatter={(d) => (d ? d.slice(5) : "")}
           interval={Math.max(1, Math.floor(data.length / 8))}
           axisLine={{ stroke: T.border }}
@@ -32,7 +32,7 @@ export function PriceChart({ data, support, resistance, showSma = true, height =
         />
         <YAxis
           domain={["auto", "auto"]}
-          tick={{ fontSize: 9, fill: T.muted, fontFamily: T.mono }}
+          tick={{ fontSize: 12, fill: T.muted, fontFamily: T.mono }}
           tickFormatter={fmtY}
           axisLine={false}
           tickLine={false}
@@ -43,7 +43,7 @@ export function PriceChart({ data, support, resistance, showSma = true, height =
             background: T.panel2,
             border: `1px solid ${T.border}`,
             borderRadius: 6,
-            fontSize: 11,
+            fontSize: 13,
             fontFamily: T.mono,
           }}
           labelStyle={{ color: T.muted }}

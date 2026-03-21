@@ -1,6 +1,7 @@
 """Seed demo data for all sample tickers."""
 
 import logging
+
 from market_insights.db.bootstrap import init_db
 from market_insights.db.session import SessionLocal
 from market_insights.services.etl_service import run_etl

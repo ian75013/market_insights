@@ -1,6 +1,7 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from datetime import datetime, UTC
 
 
 class Base(DeclarativeBase):

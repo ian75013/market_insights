@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import pandas as pd
 from pathlib import Path
 
-from market_insights.connectors.ibkr.client import IBClient
+import pandas as pd
 
+from market_insights.connectors.ibkr.client import IBClient
 
 SAMPLE_PRICES = Path(__file__).resolve().parents[2] / "data" / "sample" / "prices.csv"
 

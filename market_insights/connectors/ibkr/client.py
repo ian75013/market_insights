@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 from market_insights.core.config import settings
 
 
