@@ -72,7 +72,10 @@ class RSSNewsConnector(BaseHTTPConnector):
                 source = clean_title.rsplit(" - ", 1)[-1].strip()
                 clean_title = clean_title.rsplit(" - ", 1)[0].strip()
             # Summarize description
-            summary = summarize(clean_desc, max_sentences=2, max_chars=250) if clean_desc else ""
+            summary = (
+                summarize(clean_desc, max_sentences=2, max_chars=250)
+                if clean_desc else ""
+            )
             items.append({
                 "title": clean_title,
                 "link": raw_link,
@@ -87,7 +90,9 @@ class MultiNewsConnector:
     provider_name = "multi_news"
     def fetch(self, ticker: str, max_items: int = 10) -> list[dict]:
         try:
-            from market_insights.connectors.open_data.alpha_vantage import AlphaVantageNewsConnector
+            from market_insights.connectors.open_data.alpha_vantage import (
+                AlphaVantageNewsConnector,
+            )
             conn = AlphaVantageNewsConnector()
             if conn.available():
                 items = conn.fetch(ticker, limit=max_items)

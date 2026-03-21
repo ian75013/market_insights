@@ -101,7 +101,12 @@ class OpenAIProvider(BaseLLMProvider):
             else None,
         )
 
-    def generate_stream(self, prompt: str, *, system: str = "", temperature: float | None = None, max_tokens: int | None = None):
+    def generate_stream(
+        self, prompt: str, *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
         """Yield text chunks from OpenAI streaming API."""
         import openai
         client = openai.OpenAI(api_key=settings.openai_api_key)
@@ -338,7 +343,12 @@ class OllamaProvider(BaseLLMProvider):
             },
         )
 
-    def generate_stream(self, prompt: str, *, system: str = "", temperature: float | None = None, max_tokens: int | None = None):
+    def generate_stream(
+        self, prompt: str, *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
         """Yield text chunks from Ollama streaming API."""
         model = settings.llm_model or settings.ollama_model
         payload = {
@@ -346,10 +356,17 @@ class OllamaProvider(BaseLLMProvider):
             "prompt": prompt,
             "system": system or "",
             "stream": True,
-            "options": {"temperature": temperature or settings.llm_temperature, "num_predict": max_tokens or settings.llm_max_tokens},
+            "options": {
+                "temperature": temperature or settings.llm_temperature,
+                "num_predict": max_tokens or settings.llm_max_tokens,
+            },
         }
         with httpx.Client(timeout=120) as client:
-            with client.stream("POST", f"{settings.ollama_base_url}/api/generate", json=payload) as resp:
+            with client.stream(
+                "POST",
+                f"{settings.ollama_base_url}/api/generate",
+                json=payload,
+            ) as resp:
                 for line in resp.iter_lines():
                     if line:
                         import json as _json
