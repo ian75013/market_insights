@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { loadFullAnalysis, runEtl, getMacro } from "../services/api";
 
 /**
- * Hook: loads all analysis data for a ticker.
- *
+ * Hook: loads all analysis data for a ticker (including candlestick).
  * Returns { data, macro, loading, error, reload, runPipeline }
  */
 export function useAnalysis(ticker) {
@@ -27,33 +26,22 @@ export function useAnalysis(ticker) {
   }, [ticker]);
 
   const loadMacro = useCallback(async () => {
-    try {
-      const m = await getMacro();
-      setMacro(m);
-    } catch {
-      /* silent — macro is non-critical */
-    }
+    try { setMacro(await getMacro()); } catch { /* non-critical */ }
   }, []);
 
-  useEffect(() => {
-    load();
-    loadMacro();
-  }, [load, loadMacro]);
+  useEffect(() => { load(); loadMacro(); }, [load, loadMacro]);
 
-  const runPipeline = useCallback(
-    async (provider = "sample") => {
-      setLoading(true);
-      setError(null);
-      try {
-        await runEtl(ticker, provider);
-        await load();
-      } catch (err) {
-        setError(err.message || "Erreur ETL");
-        setLoading(false);
-      }
-    },
-    [ticker, load]
-  );
+  const runPipeline = useCallback(async (provider = "sample") => {
+    setLoading(true);
+    setError(null);
+    try {
+      await runEtl(ticker, provider);
+      await load();
+    } catch (err) {
+      setError(err.message || "Erreur ETL");
+      setLoading(false);
+    }
+  }, [ticker, load]);
 
   return { data, macro, loading, error, reload: load, runPipeline };
 }

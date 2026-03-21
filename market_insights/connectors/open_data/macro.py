@@ -114,8 +114,6 @@ class FREDConnector(BaseHTTPConnector):
 
         return dashboard
 
-    def fetch_series_history(
-        self, series_id: str, limit: int = 252
-    ) -> list[dict]:
+    def fetch_series_history(self, series_id: str, limit: int = 252) -> list[dict]:
         """Fetch historical series for charting."""
         return self.fetch_series(series_id, limit=limit, sort_order="asc")

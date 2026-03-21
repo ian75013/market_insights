@@ -85,14 +85,23 @@ class BaseHTTPConnector:
                     resp = client.get(url)
                     if resp.status_code == 429:
                         wait = int(resp.headers.get("Retry-After", 5))
-                        logger.warning("Rate-limited by %s, waiting %ds (attempt %d)", url[:60], wait, attempt)
+                        logger.warning(
+                            "Rate-limited by %s, waiting %ds (attempt %d)",
+                            url[:60],
+                            wait,
+                            attempt,
+                        )
                         time.sleep(min(wait, 30))
                         continue
                     resp.raise_for_status()
                     return resp.json() if parse == "json" else resp.text
             except Exception as exc:
                 last_exc = exc
-                logger.warning("HTTP error on %s (attempt %d): %s", url[:60], attempt, exc)
+                logger.warning(
+                    "HTTP error on %s (attempt %d): %s", url[:60], attempt, exc
+                )
                 if attempt < self.max_retries:
                     time.sleep(1.5 * attempt)
-        raise ConnectionError(f"Failed after {self.max_retries} attempts: {last_exc}") from last_exc
+        raise ConnectionError(
+            f"Failed after {self.max_retries} attempts: {last_exc}"
+        ) from last_exc

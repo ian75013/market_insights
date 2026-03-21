@@ -58,9 +58,14 @@ class FMPProfileConnector(BaseHTTPConnector):
             "pe": p.get("pe") or 0.0,
             "beta": p.get("beta") or 0.0,
             "price": p.get("price", 0.0),
-            "dividend_yield": (p.get("lastDiv", 0.0) or 0.0) / max(p.get("price", 1.0), 0.01),
-            "52w_high": p.get("range", "0-0").split("-")[-1].strip() if p.get("range") else 0.0,
-            "52w_low": p.get("range", "0-0").split("-")[0].strip() if p.get("range") else 0.0,
+            "dividend_yield": (p.get("lastDiv", 0.0) or 0.0)
+            / max(p.get("price", 1.0), 0.01),
+            "52w_high": p.get("range", "0-0").split("-")[-1].strip()
+            if p.get("range")
+            else 0.0,
+            "52w_low": p.get("range", "0-0").split("-")[0].strip()
+            if p.get("range")
+            else 0.0,
             "avg_volume": p.get("volAvg", 0),
             "description": (p.get("description", "") or "")[:500],
             "website": p.get("website", ""),
@@ -129,7 +134,10 @@ class FMPEarningsConnector(BaseHTTPConnector):
         if not self.available():
             raise ConnectionError("FMP: no API key or network disabled")
 
-        url = f"{FMP_BASE}/historical/earning_calendar/{ticker.upper()}?limit=8&apikey={self.api_key}"
+        url = (
+            f"{FMP_BASE}/historical/earning_calendar/{ticker.upper()}"
+            f"?limit=8&apikey={self.api_key}"
+        )
         logger.info("FMP: fetching %s earnings calendar", ticker)
         data = self.get_json(url, cache_key=f"fmp_earnings:{ticker}")
 

@@ -9,7 +9,7 @@ def test_health():
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "3.0.0"
+    assert body["version"] == "4.0.0"
 
 
 def test_sources_endpoint():
@@ -44,7 +44,9 @@ def test_etl_then_insight():
 
 
 def test_etl_batch():
-    etl = client.post("/etl/batch", params={"tickers": "MSFT,NVDA", "provider": "sample"})
+    etl = client.post(
+        "/etl/batch", params={"tickers": "MSFT,NVDA", "provider": "sample"}
+    )
     assert etl.status_code == 200
     body = etl.json()
     assert len(body) == 2

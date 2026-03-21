@@ -57,11 +57,21 @@ class StooqPriceConnector(BaseHTTPConnector):
 
         df.columns = [c.lower() for c in df.columns]
         df["ticker"] = ticker.upper()
-        df = df.rename(columns={
-            "date": "date", "open": "open", "high": "high",
-            "low": "low", "close": "close", "volume": "volume",
-        })
+        df = df.rename(
+            columns={
+                "date": "date",
+                "open": "open",
+                "high": "high",
+                "low": "low",
+                "close": "close",
+                "volume": "volume",
+            }
+        )
         df["date"] = pd.to_datetime(df["date"])
         if "volume" not in df.columns:
             df["volume"] = 0
-        return df[["ticker", "date", "open", "high", "low", "close", "volume"]].sort_values("date").reset_index(drop=True)
+        return (
+            df[["ticker", "date", "open", "high", "low", "close", "volume"]]
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
