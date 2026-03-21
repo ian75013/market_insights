@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Label, Tag } from "./ui";
-import { ragChat, getLlmProviders, indexRag, getRagStats } from "../services/api";
+import { ragChatStream, getLlmProviders, indexRag, getRagStats } from "../services/api";
 
 const PROV_COLORS = { openai:"#10a37f", anthropic:"#d97706", mistral:"#f97316", groq:"#6366f1", ollama:"#22d3ee", lmstudio:"#a78bfa", fallback:"var(--muted)" };
 
@@ -12,7 +12,10 @@ export function RagChatTab({ ticker }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
   const [indexing, setIndexing] = useState(false);
+  const [streamText, setStreamText] = useState("");
+  const [streamSources, setStreamSources] = useState([]);
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -25,61 +28,103 @@ export function RagChatTab({ ticker }) {
     getRagStats().then(setRagStats).catch(()=>{});
   }, []);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamText, status]);
 
   const curProv = providers.find(p => p.name === backend);
   const models = curProv?.models || [];
-
   const pickBackend = (name) => { setBackend(name); const p = providers.find(x=>x.name===name); if (p?.models?.length) setModel(p.models[0]); else setModel(""); };
 
   const send = useCallback(async () => {
     const q = input.trim(); if (!q || loading) return;
-    setMessages(prev => [...prev, { role:"user", content:q, ts: new Date().toISOString() }]);
-    setInput(""); setLoading(true);
+    setMessages(prev => [...prev, { role:"user", content:q }]);
+    setInput(""); setLoading(true); setStatus(""); setStreamText(""); setStreamSources([]);
+
+    let finalText = "";
+    let finalSources = [];
+    let llmInfo = {};
+
     try {
-      const resp = await ragChat({ ticker, question:q, llm_backend:backend||undefined, llm_model:model||undefined, language:"fr", top_k:5 });
-      setMessages(prev => [...prev, { role:"assistant", content:resp.answer, sources:resp.sources, llm:resp.llm, ts:resp.generated_at }]);
+      await ragChatStream(
+        { ticker, question: q, llm_backend: backend || undefined, llm_model: model || undefined, language: "fr", top_k: 5 },
+        (event, data) => {
+          switch (event) {
+            case "status":
+              setStatus(data.message);
+              break;
+            case "sources":
+              finalSources = data;
+              setStreamSources(data);
+              break;
+            case "token":
+              finalText += data.text;
+              setStreamText(prev => prev + data.text);
+              break;
+            case "done":
+              llmInfo = data;
+              break;
+          }
+        }
+      );
+      setMessages(prev => [...prev, { role: "assistant", content: finalText, sources: finalSources, llm: llmInfo }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role:"error", content:`Erreur: ${err.message}`, ts: new Date().toISOString() }]);
-    } finally { setLoading(false); }
+      setMessages(prev => [...prev, { role: "error", content: err.message }]);
+    } finally {
+      setLoading(false); setStatus(""); setStreamText(""); setStreamSources([]);
+    }
   }, [input, loading, ticker, backend, model]);
 
   const handleIndex = async () => {
     setIndexing(true);
     try {
       const r = await indexRag(ticker);
-      setMessages(prev => [...prev, { role:"system", content:`Index RAG mis à jour: ${r.indexed_chunks} chunks indexés.`, ts: new Date().toISOString() }]);
+      setMessages(prev => [...prev, { role: "system", content: `Index RAG mis à jour: ${r.indexed_chunks} chunks indexés.` }]);
       setRagStats(await getRagStats());
-    } catch (err) { setMessages(prev => [...prev, { role:"error", content:`Erreur: ${err.message}`, ts: new Date().toISOString() }]); }
+    } catch (err) { setMessages(prev => [...prev, { role: "error", content: err.message }]); }
     finally { setIndexing(false); }
   };
 
   const quickPrompts = [
-    `Quels sont les principaux catalyseurs pour ${ticker} ?`,
-    `Quels risques pèsent sur ${ticker} actuellement ?`,
+    `Quels sont les catalyseurs pour ${ticker} ?`,
+    `Quels risques pèsent sur ${ticker} ?`,
     `Résume la situation fondamentale de ${ticker}.`,
-    `Quelle est la tendance technique de ${ticker} ?`,
+    `Tendance technique de ${ticker} ?`,
   ];
 
   return (
     <div className="grid-sidebar-w">
-      {/* Chat */}
-      <Card delay={0} className="flex-col" style={{ display:"flex", flexDirection:"column", minHeight:420 }}>
+      <Card delay={0} className="flex-col" style={{ display:"flex", flexDirection:"column", minHeight:440 }}>
         <div className="card-header">
           <Label>RAG Chat — {ticker}</Label>
           {backend && <Tag variant={backend==="fallback"?"muted":"accent"}>{backend}{model ? ` / ${model.split("/").pop().split("-").slice(0,2).join("-")}` : ""}</Tag>}
         </div>
 
         <div className="chat-area">
-          {messages.length === 0 && (
-            <div className="empty-state"><h3>Posez une question sur {ticker}</h3><p className="text-sm">Le RAG récupère les documents indexés et les envoie au LLM sélectionné.</p></div>
+          {messages.length === 0 && !loading && (
+            <div className="empty-state"><h3>Posez une question sur {ticker}</h3><p className="text-sm">Le RAG récupère les documents indexés et les envoie au LLM.</p></div>
           )}
           {messages.map((msg, i) => <Bubble key={i} msg={msg} />)}
-          {loading && <div className="bubble bubble-assistant"><span className="loading-pulse text-sm">● Recherche et génération…</span></div>}
+
+          {/* Live streaming zone */}
+          {loading && (
+            <div className="bubble bubble-assistant">
+              {status && (
+                <div className="flex-row gap-xs" style={{ marginBottom: streamText ? 8 : 0 }}>
+                  <span className="loading-pulse" style={{ fontSize: "1.1em" }}>●</span>
+                  <span className="text-sm muted">{status}</span>
+                </div>
+              )}
+              {streamSources.length > 0 && !streamText && (
+                <div className="text-xs muted" style={{ marginBottom: 6 }}>
+                  Sources: {streamSources.map(s => s.title).join(", ")}
+                </div>
+              )}
+              {streamText && <div className="text-base lh-relaxed">{streamText}<span className="loading-pulse">▊</span></div>}
+            </div>
+          )}
           <div ref={endRef} />
         </div>
 
-        {messages.length === 0 && (
+        {messages.length === 0 && !loading && (
           <div className="flex-row gap-xs" style={{ marginBottom: 12, flexWrap: "wrap" }}>
             {quickPrompts.map((q, i) => <button key={i} className="quick-pick" onClick={() => setInput(q)}>{q}</button>)}
           </div>
@@ -106,7 +151,6 @@ export function RagChatTab({ ticker }) {
             ))}
           </div>
         </Card>
-
         {models.length > 0 && (
           <Card delay={120}><Label>Modèle</Label>
             <select className="select input-mono" value={model} onChange={e=>setModel(e.target.value)} style={{ width:"100%", marginTop:6 }}>
@@ -114,7 +158,6 @@ export function RagChatTab({ ticker }) {
             </select>
           </Card>
         )}
-
         <Card delay={180}><Label>Index RAG</Label>
           {ragStats && <div className="text-sm muted" style={{ marginBottom:8 }}>
             Tickers: {ragStats.tickers_indexed?.join(", ")||"aucun"} · {ragStats.total_chunks||0} chunks
@@ -123,12 +166,11 @@ export function RagChatTab({ ticker }) {
             {indexing ? "Indexation…" : `Réindexer ${ticker}`}
           </button>
         </Card>
-
         <Card delay={240}><Label>Guide</Label>
           <div className="text-sm muted lh-relaxed">
-            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Cloud:</strong> Configurez les clés API dans .env</p>
-            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Local:</strong> Lancez <code>ollama serve</code> ou LMStudio</p>
-            <p><strong style={{ color:"var(--text)" }}>Fallback:</strong> Retourne le contexte RAG brut</p>
+            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Cloud:</strong> Clés API dans .env</p>
+            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Local:</strong> ollama serve ou LMStudio</p>
+            <p><strong style={{ color:"var(--text)" }}>Fallback:</strong> Contexte RAG brut</p>
           </div>
         </Card>
       </div>
@@ -143,12 +185,12 @@ function Bubble({ msg }) {
     <div className={`bubble ${cls}`}>
       <div className="bubble-role">
         <span>{labels[msg.role] || msg.role}</span>
-        {msg.llm && <Tag variant="accent">{msg.llm.provider}/{msg.llm.model?.split("/").pop()?.slice(0,20)}</Tag>}
+        {msg.llm?.provider && <Tag variant="accent">{msg.llm.provider}</Tag>}
       </div>
-      <div>{msg.content}</div>
+      <div className="text-base lh-relaxed">{msg.content}</div>
       {msg.sources?.length > 0 && (
         <div className="bubble-sources">
-          <div className="text-xs muted" style={{ marginBottom:4 }}>Sources citées:</div>
+          <div className="text-xs muted" style={{ marginBottom:4 }}>Sources:</div>
           {msg.sources.map((s,i) => (
             <div key={i} className="flex-row gap-xs text-xs">
               <span className="text-accent fw-600">[{i+1}]</span>

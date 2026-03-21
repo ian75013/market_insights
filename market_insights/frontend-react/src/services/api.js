@@ -73,3 +73,40 @@ export async function loadFullAnalysis(ticker) {
     candlestick: candlestick.status === "fulfilled" ? candlestick.value : null,
   };
 }
+
+/* ━━ Streaming chat (SSE) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+export async function ragChatStream({ ticker, question, llm_backend, llm_model, language = "fr", top_k = 5 }, onEvent) {
+  const url = `${BASE}/llm/chat/stream`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ticker, question, llm_backend, llm_model, language, top_k }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail?.detail || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    let eventType = "";
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith("data: ") && eventType) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          onEvent(eventType, data);
+        } catch { /* skip malformed */ }
+        eventType = "";
+      }
+    }
+  }
+}

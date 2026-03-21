@@ -101,6 +101,32 @@ class OpenAIProvider(BaseLLMProvider):
             else None,
         )
 
+    def generate_stream(
+        self, prompt: str, *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        """Yield text chunks from OpenAI streaming API."""
+        import openai
+        client = openai.OpenAI(api_key=settings.openai_api_key)
+        model = settings.llm_model or "gpt-4o-mini"
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        stream = client.chat.completions.create(
+            model=model, messages=messages,
+            temperature=temperature or settings.llm_temperature,
+            max_tokens=max_tokens or settings.llm_max_tokens,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
+
+
 
 # ━━ Anthropic ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -316,6 +342,42 @@ class OllamaProvider(BaseLLMProvider):
                 "eval_count": data.get("eval_count"),
             },
         )
+
+    def generate_stream(
+        self, prompt: str, *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        """Yield text chunks from Ollama streaming API."""
+        model = settings.llm_model or settings.ollama_model
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "system": system or "",
+            "stream": True,
+            "options": {
+                "temperature": temperature or settings.llm_temperature,
+                "num_predict": max_tokens or settings.llm_max_tokens,
+            },
+        }
+        with httpx.Client(timeout=120) as client:
+            with client.stream(
+                "POST",
+                f"{settings.ollama_base_url}/api/generate",
+                json=payload,
+            ) as resp:
+                for line in resp.iter_lines():
+                    if line:
+                        import json as _json
+                        try:
+                            data = _json.loads(line)
+                            token = data.get("response", "")
+                            if token:
+                                yield token
+                        except Exception:
+                            pass
+
 
 
 # ━━ LMStudio (local, OpenAI-compatible) ━━━━━━━━━━━━━━━━━━━━━━━━━━

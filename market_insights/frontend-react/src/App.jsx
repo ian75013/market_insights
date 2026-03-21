@@ -17,7 +17,7 @@ export default function App() {
   const [ticker, setTicker] = useState("AAPL");
   const [tab, setTab] = useState("overview");
   const [provider, setProvider] = useState("sample");
-  const [theme, setTheme] = useState(() => localStorage.getItem("mi-theme") || "dark");
+  const [theme, setTheme] = useState(() => localStorage.getItem("mi-theme") || "light");
   const { data, macro, loading, error, reload, runPipeline } = useAnalysis(ticker);
 
   useEffect(() => {
