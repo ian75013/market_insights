@@ -9,7 +9,7 @@ def test_health():
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "3.0.0"
+    assert body["version"] == "4.0.0"
 
 
 def test_sources_endpoint():

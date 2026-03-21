@@ -1,17 +1,16 @@
-"""Market Insights API v3 — FastAPI application.
+"""Market Insights API v4 — FastAPI application.
 
-New in v3:
-- /providers          : list available data providers + status
-- /etl/batch          : batch ETL for multiple tickers
-- /macro              : macro dashboard (FRED or sample)
-- /fundamentals/{t}   : multi-source fundamentals
-- /news/{ticker}      : multi-source news feed
-- /cache/stats        : cache monitoring
-- /cache/clear        : cache invalidation
+New in v4:
+- /llm/providers           : list LLM providers + models + availability
+- /llm/chat                : RAG-powered chat with LLM selector
+- /chart/candlestick/{t}   : annotated OHLCV with per-bar signals
+- /rag/index/{t}           : manually trigger RAG index
+- /rag/stats               : vector store stats
 """
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from market_insights.core.cache import cache_store
@@ -19,7 +18,7 @@ from market_insights.core.config import settings
 from market_insights.db.bootstrap import init_db
 from market_insights.db.session import get_db
 from market_insights.etl.extractors.price_provider import PriceProviderRouter
-from market_insights.schemas.market import ComparableInsightResponse, FairValueResponse, InsightResponse
+from market_insights.schemas.market import FairValueResponse
 from market_insights.services.etl_service import run_batch_etl, run_etl
 from market_insights.services.hybrid_insight_service import HybridInsightService
 from market_insights.services.market_service import MarketInsightService
@@ -28,15 +27,12 @@ init_db()
 
 app = FastAPI(
     title="Market Insights API",
-    version="3.0.0",
-    description=(
-        "Plateforme de recherche actions — ETL multi-source, analyse technique, "
-        "juste valeur, RAG documentaire, insight hybride."
-    ),
+    version="4.0.0",
+    description="Plateforme de recherche actions — ETL multi-source, analyse technique, RAG vectoriel, LLM multi-provider, chandeliers annotés.",
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:3000"],
+    allow_origins=["http://localhost:4200", "http://127.0.0.1:4200", "http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,12 +46,7 @@ hybrid_service = HybridInsightService()
 
 @app.get("/health", tags=["system"])
 def health():
-    return {
-        "status": "ok",
-        "version": "3.0.0",
-        "network_enabled": settings.use_network,
-        "default_provider": settings.default_price_provider,
-    }
+    return {"status": "ok", "version": "4.0.0", "network_enabled": settings.use_network, "default_provider": settings.default_price_provider}
 
 
 @app.get("/sources", tags=["system"])
@@ -65,12 +56,12 @@ def sources():
         "fundamentals_providers": ["sample", "yahoo", "alpha_vantage", "fmp", "sec_edgar", "multi"],
         "news_providers": ["sample", "rss", "alpha_vantage", "multi"],
         "macro_providers": ["sample", "fred"],
+        "llm_providers": ["openai", "anthropic", "mistral", "groq", "ollama", "lmstudio", "fallback"],
     }
 
 
 @app.get("/providers", tags=["system"])
 def providers():
-    """Live provider availability status."""
     router = PriceProviderRouter()
     return {
         "price_providers": router.available_providers(),
@@ -79,6 +70,10 @@ def providers():
             "alpha_vantage": bool(settings.alpha_vantage_api_key),
             "fred": bool(settings.fred_api_key),
             "fmp": bool(settings.fmp_api_key),
+            "openai": bool(settings.openai_api_key),
+            "anthropic": bool(settings.anthropic_api_key),
+            "mistral": bool(settings.mistral_api_key),
+            "groq": bool(settings.groq_api_key),
         },
     }
 
@@ -86,11 +81,7 @@ def providers():
 # ━━ ETL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @app.post("/etl/run", tags=["etl"])
-def run_pipeline(
-    ticker: str = Query(..., min_length=1),
-    provider: str = Query("sample"),
-    db: Session = Depends(get_db),
-):
+def run_pipeline(ticker: str = Query(..., min_length=1), provider: str = Query("sample"), db: Session = Depends(get_db)):
     try:
         return run_etl(db, ticker=ticker, provider=provider)
     except Exception as exc:
@@ -98,16 +89,10 @@ def run_pipeline(
 
 
 @app.post("/etl/batch", tags=["etl"])
-def run_batch_pipeline(
-    tickers: str = Query(..., description="Comma-separated tickers: AAPL,MSFT,NVDA"),
-    provider: str = Query("sample"),
-    db: Session = Depends(get_db),
-):
+def run_batch_pipeline(tickers: str = Query(...), provider: str = Query("sample"), db: Session = Depends(get_db)):
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if not ticker_list:
         raise HTTPException(status_code=400, detail="No tickers provided")
-    if len(ticker_list) > 20:
-        raise HTTPException(status_code=400, detail="Max 20 tickers per batch")
     return run_batch_etl(db, ticker_list, provider=provider)
 
 
@@ -146,16 +131,59 @@ def hybrid_insight(ticker: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+# ━━ Candlestick chart ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/chart/candlestick/{ticker}", tags=["chart"])
+def candlestick_chart(ticker: str, db: Session = Depends(get_db)):
+    """Return OHLCV bars with per-bar signal annotations for chart rendering."""
+    try:
+        from market_insights.analysis.candlestick_engine import annotate_candlesticks
+        df = service._load_df(db, ticker)
+        bars = annotate_candlesticks(df)
+        # Summary of all detected signals
+        all_signals = []
+        for bar in bars:
+            for s in bar.get("signals", []):
+                s["date"] = bar["date"]
+                all_signals.append(s)
+        return {
+            "ticker": ticker.upper(),
+            "bars": bars,
+            "signal_summary": {
+                "total": len(all_signals),
+                "bullish": len([s for s in all_signals if s.get("severity") == "bullish"]),
+                "bearish": len([s for s in all_signals if s.get("severity") == "bearish"]),
+                "neutral": len([s for s in all_signals if s.get("severity") == "neutral"]),
+            },
+            "signals": all_signals[-20:],  # last 20 signals for display
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 # ━━ Data ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-@app.get("/rag/sources/{ticker}", tags=["data"])
+@app.get("/rag/sources/{ticker}", tags=["rag"])
 def rag_sources(ticker: str, db: Session = Depends(get_db)):
     return {"ticker": ticker.upper(), "sources": service.get_rag_sources(db, ticker)}
 
 
+@app.post("/rag/index/{ticker}", tags=["rag"])
+def rag_index(ticker: str, db: Session = Depends(get_db)):
+    """Manually trigger RAG vector indexing for a ticker."""
+    from market_insights.rag.store import index_documents
+    count = index_documents(db, ticker)
+    return {"ticker": ticker.upper(), "indexed_chunks": count}
+
+
+@app.get("/rag/stats", tags=["rag"])
+def rag_stats():
+    from market_insights.rag.embeddings import vector_store
+    return vector_store.stats()
+
+
 @app.get("/fundamentals/{ticker}", tags=["data"])
 def fundamentals(ticker: str):
-    """Fetch fundamentals from best available source."""
     try:
         from market_insights.connectors.open_data.fundamentals import MultiFundamentalsConnector, SampleFundamentalsConnector
         if settings.use_network:
@@ -169,7 +197,6 @@ def fundamentals(ticker: str):
 
 @app.get("/news/{ticker}", tags=["data"])
 def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
-    """Fetch news from best available source."""
     try:
         from market_insights.connectors.open_data.news import MultiNewsConnector, SampleNewsConnector
         if settings.use_network:
@@ -183,13 +210,48 @@ def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
 
 @app.get("/macro", tags=["data"])
 def macro_dashboard():
-    """Macro indicators from FRED or sample data."""
     try:
         from market_insights.connectors.open_data.macro import FREDConnector, SampleMacroConnector
         fred = FREDConnector()
         if fred.available():
             return {"source": "fred", "data": fred.fetch_macro_dashboard()}
         return {"source": "sample", "data": SampleMacroConnector().fetch()}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ━━ LLM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@app.get("/llm/providers", tags=["llm"])
+def llm_providers():
+    """List all LLM providers with availability and model lists."""
+    from market_insights.llm.providers import list_providers
+    return {"providers": list_providers(), "active_backend": settings.llm_backend}
+
+
+class ChatRequest(BaseModel):
+    question: str
+    ticker: str = "AAPL"
+    llm_backend: str | None = None
+    llm_model: str | None = None
+    language: str = "fr"
+    top_k: int = 5
+
+
+@app.post("/llm/chat", tags=["llm"])
+def llm_chat(req: ChatRequest, db: Session = Depends(get_db)):
+    """RAG-powered chat: retrieve context → augment prompt → generate with selected LLM."""
+    try:
+        from market_insights.rag.chat import rag_chat
+        return rag_chat(
+            db,
+            ticker=req.ticker,
+            question=req.question,
+            llm_backend=req.llm_backend,
+            llm_model=req.llm_model,
+            language=req.language,
+            top_k=req.top_k,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -202,6 +264,6 @@ def cache_stats():
 
 
 @app.post("/cache/clear", tags=["system"])
-def cache_clear(prefix: str = Query("", description="Clear keys matching this prefix (empty = all)")):
+def cache_clear(prefix: str = Query("")):
     cleared = cache_store.invalidate(prefix)
     return {"cleared_keys": cleared, "prefix": prefix or "(all)"}

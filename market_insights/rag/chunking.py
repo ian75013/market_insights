@@ -1,9 +1,13 @@
+"""Text chunking for RAG ingestion."""
+
 from __future__ import annotations
 
-from collections.abc import Iterable
+from market_insights.core.config import settings
 
 
-def chunk_text(text: str, chunk_size: int = 350, overlap: int = 40) -> list[str]:
+def chunk_text(text: str, chunk_size: int | None = None, overlap: int | None = None) -> list[str]:
+    chunk_size = chunk_size or settings.rag_chunk_size
+    overlap = overlap or settings.rag_chunk_overlap
     text = " ".join(text.split())
     if not text:
         return []

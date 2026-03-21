@@ -1,4 +1,12 @@
+"""Report generation — uses LLM when available, deterministic fallback otherwise."""
+
 from __future__ import annotations
+
+import logging
+
+from market_insights.llm.providers import get_llm
+
+logger = logging.getLogger(__name__)
 
 
 def generate_report(
@@ -14,17 +22,20 @@ def generate_report(
     levels: dict | None = None,
     signals: dict | None = None,
     market_context: dict | None = None,
+    use_llm: bool = False,
+    llm_backend: str | None = None,
 ) -> str:
     summary = summary or {}
     levels = levels or {}
     signals = signals or {"patterns": [], "candles": [], "flags": {}}
     market_context = market_context or {}
 
+    # Build deterministic report (always)
     sources = "; ".join(f"{c['document_type']}:{c['title']}" for c in rag_context[:3]) or "aucune source"
     patterns = ", ".join(signals.get("patterns", [])[:3]) or "aucun pattern majeur"
     candles = ", ".join(signals.get("candles", [])[:2]) or "aucun chandelier décisif"
 
-    return (
+    deterministic = (
         f"Résumé d'analyse — {ticker}. "
         f"Tendance court terme {summary.get('trend_short', 'neutre')}, tendance de fond {summary.get('trend_long', 'neutre')}. "
         f"Opinion: {summary.get('opinion', 'neutre')}. "
@@ -39,3 +50,26 @@ def generate_report(
         f"Contexte documentaire utilisé: {sources}. "
         f"Avertissement: contenu analytique non personnalisé, ne constituant pas un conseil en investissement."
     )
+
+    if not use_llm:
+        return deterministic
+
+    # Try LLM enhancement
+    try:
+        llm = get_llm(llm_backend)
+        if not llm.available():
+            return deterministic
+
+        prompt = f"""Voici les données d'analyse pour {ticker}:
+
+{deterministic}
+
+Réécris ce résumé de manière plus fluide et professionnelle, en conservant TOUS les chiffres et niveaux.
+Structure en 3 paragraphes: 1) Situation technique 2) Valorisation 3) Synthèse et niveaux clés.
+Reste factuel, pas de conseil en investissement."""
+
+        resp = llm.generate(prompt, system="Tu es un analyste financier senior rédigeant une note de recherche.")
+        return resp.text
+    except Exception as exc:
+        logger.warning("LLM report generation failed, using deterministic: %s", exc)
+        return deterministic
