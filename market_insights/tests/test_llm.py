@@ -1,4 +1,5 @@
 """Tests for LLM provider abstraction."""
+
 from market_insights.llm.providers import get_llm, list_providers, FallbackProvider
 
 

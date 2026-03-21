@@ -14,8 +14,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
-from market_insights.connectors.open_data.fundamentals import MultiFundamentalsConnector, SampleFundamentalsConnector
-from market_insights.connectors.open_data.news import MultiNewsConnector, SampleNewsConnector
+from market_insights.connectors.open_data.fundamentals import (
+    MultiFundamentalsConnector,
+    SampleFundamentalsConnector,
+)
+from market_insights.connectors.open_data.news import (
+    MultiNewsConnector,
+    SampleNewsConnector,
+)
 from market_insights.core.config import settings
 from market_insights.etl.extractors.price_provider import PriceProviderRouter
 from market_insights.etl.loaders.document_loader import replace_documents
@@ -65,13 +71,15 @@ def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
         else:
             fundamentals = SampleFundamentalsConnector().fetch(ticker)
         fund_source = fundamentals.pop("_source", "sample")
-        docs.append({
-            "document_type": "fundamentals_snapshot",
-            "title": f"{ticker} fundamentals ({fund_source})",
-            "published_at": started.isoformat(),
-            "url": "",
-            "content": _format_fundamentals(fundamentals),
-        })
+        docs.append(
+            {
+                "document_type": "fundamentals_snapshot",
+                "title": f"{ticker} fundamentals ({fund_source})",
+                "published_at": started.isoformat(),
+                "url": "",
+                "content": _format_fundamentals(fundamentals),
+            }
+        )
     except Exception as exc:
         logger.warning("Fundamentals ingestion failed for %s: %s", ticker, exc)
         fundamentals = {}
@@ -84,33 +92,45 @@ def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
             news_items = SampleNewsConnector().fetch(ticker)
 
         for item in news_items:
-            docs.append({
-                "document_type": "news",
-                "title": item.get("title", "news"),
-                "published_at": item.get("published_at", ""),
-                "url": item.get("link", ""),
-                "content": item.get("content", ""),
-            })
+            docs.append(
+                {
+                    "document_type": "news",
+                    "title": item.get("title", "news"),
+                    "published_at": item.get("published_at", ""),
+                    "url": item.get("link", ""),
+                    "content": item.get("content", ""),
+                }
+            )
     except Exception as exc:
         logger.warning("News ingestion failed for %s: %s", ticker, exc)
 
     # 4c. SEC filings (if network and CIK available)
     if settings.use_network:
         try:
-            from market_insights.connectors.open_data.fundamentals import SECCompanyFactsConnector
+            from market_insights.connectors.open_data.fundamentals import (
+                SECCompanyFactsConnector,
+            )
+
             sec = SECCompanyFactsConnector(use_network=True)
             sec_data = sec.fetch(ticker)
-            docs.append({
-                "document_type": "sec_filing",
-                "title": f"{ticker} SEC EDGAR company facts",
-                "published_at": started.isoformat(),
-                "url": f"https://data.sec.gov/api/xbrl/companyfacts/CIK{sec_data.get('cik', '')}.json",
-                "content": _format_fundamentals(sec_data),
-            })
+            docs.append(
+                {
+                    "document_type": "sec_filing",
+                    "title": f"{ticker} SEC EDGAR company facts",
+                    "published_at": started.isoformat(),
+                    "url": (
+                        "https://data.sec.gov/api/xbrl/companyfacts/"
+                        f"CIK{sec_data.get('cik', '')}.json"
+                    ),
+                    "content": _format_fundamentals(sec_data),
+                }
+            )
         except Exception as exc:
             logger.debug("SEC ingestion skipped for %s: %s", ticker, exc)
 
-    loaded_docs = replace_documents(db, ticker, source="open_data", docs=docs) if docs else 0
+    loaded_docs = (
+        replace_documents(db, ticker, source="open_data", docs=docs) if docs else 0
+    )
 
     elapsed = (datetime.now(UTC) - started).total_seconds()
 
@@ -125,7 +145,9 @@ def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
     }
 
 
-def run_batch_etl(db: Session, tickers: list[str], provider: str | None = None) -> list[dict]:
+def run_batch_etl(
+    db: Session, tickers: list[str], provider: str | None = None
+) -> list[dict]:
     """Run ETL for multiple tickers, collecting results."""
     results = []
     for ticker in tickers:

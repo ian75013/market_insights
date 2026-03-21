@@ -51,7 +51,9 @@ class AlphaVantagePriceConnector(BaseHTTPConnector):
             f"&apikey={self.api_key}"
         )
         logger.info("AlphaVantage: fetching %s daily prices", ticker)
-        csv_text = self.get_csv_text(url, cache_key=f"av_prices_csv:{ticker}:{outputsize}")
+        csv_text = self.get_csv_text(
+            url, cache_key=f"av_prices_csv:{ticker}:{outputsize}"
+        )
 
         df = pd.read_csv(StringIO(csv_text))
         if df.empty or "timestamp" not in df.columns:
@@ -86,7 +88,9 @@ class AlphaVantageOverviewConnector(BaseHTTPConnector):
         if not self.available():
             raise ConnectionError("Alpha Vantage: no API key or network disabled")
 
-        url = f"{AV_BASE}?function=OVERVIEW&symbol={ticker.upper()}&apikey={self.api_key}"
+        url = (
+            f"{AV_BASE}?function=OVERVIEW&symbol={ticker.upper()}&apikey={self.api_key}"
+        )
         logger.info("AlphaVantage: fetching %s overview", ticker)
         data = self.get_json(url, cache_key=f"av_overview:{ticker}")
 
@@ -164,13 +168,15 @@ class AlphaVantageNewsConnector(BaseHTTPConnector):
                         pass
                     break
 
-            items.append({
-                "title": feed.get("title", ""),
-                "link": feed.get("url", ""),
-                "published_at": feed.get("time_published", ""),
-                "content": (feed.get("summary", "") or "")[:400],
-                "source": feed.get("source", ""),
-                "sentiment_score": sentiment_score,
-                "sentiment_label": feed.get("overall_sentiment_label", ""),
-            })
+            items.append(
+                {
+                    "title": feed.get("title", ""),
+                    "link": feed.get("url", ""),
+                    "published_at": feed.get("time_published", ""),
+                    "content": (feed.get("summary", "") or "")[:400],
+                    "source": feed.get("source", ""),
+                    "sentiment_score": sentiment_score,
+                    "sentiment_label": feed.get("overall_sentiment_label", ""),
+                }
+            )
         return items
