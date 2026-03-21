@@ -15,11 +15,7 @@ def detect_signals(df: pd.DataFrame) -> dict:
 
     bullish_candle = close > open_ and (close - open_) > 0.4 * max(high - low, 1e-9)
     bearish_candle = close < open_ and (open_ - close) > 0.4 * max(high - low, 1e-9)
-    bullish_engulfing = (
-        close > open_
-        and prev_close < float(prev["open"])
-        and close >= float(prev["open"])
-    )
+    bullish_engulfing = close > open_ and prev_close < float(prev["open"]) and close >= float(prev["open"])
 
     breakout_20d = close >= float(df["high"].tail(20).max()) * 0.997
     pullback_to_sma20 = abs(close - float(latest["sma_20"])) / max(close, 1e-9) <= 0.01

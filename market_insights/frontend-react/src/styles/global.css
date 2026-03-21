@@ -77,3 +77,11 @@ body {
   animation: shimmer 1.5s infinite;
   border-radius: 6px;
 }
+
+:root {
+  --app-zoom: 1.3;
+}
+
+#root {
+  zoom: var(--app-zoom);
+}

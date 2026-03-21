@@ -1,5 +1,4 @@
 """Tests for candlestick annotation engine."""
-
 import pandas as pd
 from market_insights.analysis.candlestick_engine import annotate_candlesticks
 
@@ -13,17 +12,15 @@ def _sample_df():
             price += 5
         if i == 20:  # gap down
             price -= 3
-        rows.append(
-            {
-                "ticker": "TEST",
-                "date": pd.Timestamp("2025-01-01") + pd.Timedelta(days=i),
-                "open": price - 0.5 + (0.8 if i % 5 == 0 else 0),
-                "high": price + 1.5,
-                "low": price - 1.0 - (0.5 if i == 15 else 0),
-                "close": price + 0.3 * (1 if i % 2 == 0 else -1),
-                "volume": 1000 + i * 10 + (3000 if i == 25 else 0),
-            }
-        )
+        rows.append({
+            "ticker": "TEST",
+            "date": pd.Timestamp("2025-01-01") + pd.Timedelta(days=i),
+            "open": price - 0.5 + (0.8 if i % 5 == 0 else 0),
+            "high": price + 1.5,
+            "low": price - 1.0 - (0.5 if i == 15 else 0),
+            "close": price + 0.3 * (1 if i % 2 == 0 else -1),
+            "volume": 1000 + i * 10 + (3000 if i == 25 else 0),
+        })
         price += 0.5
     return pd.DataFrame(rows)
 

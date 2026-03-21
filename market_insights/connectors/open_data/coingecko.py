@@ -27,21 +27,11 @@ CG_BASE = "https://api.coingecko.com/api/v3"
 
 # Common ticker-to-coingecko-id mapping
 TICKER_MAP = {
-    "BTC": "bitcoin",
-    "ETH": "ethereum",
-    "SOL": "solana",
-    "ADA": "cardano",
-    "DOGE": "dogecoin",
-    "DOT": "polkadot",
-    "AVAX": "avalanche-2",
-    "MATIC": "matic-network",
-    "LINK": "chainlink",
-    "UNI": "uniswap",
-    "XRP": "ripple",
-    "BNB": "binancecoin",
-    "ATOM": "cosmos",
-    "LTC": "litecoin",
-    "NEAR": "near",
+    "BTC": "bitcoin", "ETH": "ethereum", "SOL": "solana",
+    "ADA": "cardano", "DOGE": "dogecoin", "DOT": "polkadot",
+    "AVAX": "avalanche-2", "MATIC": "matic-network", "LINK": "chainlink",
+    "UNI": "uniswap", "XRP": "ripple", "BNB": "binancecoin",
+    "ATOM": "cosmos", "LTC": "litecoin", "NEAR": "near",
 }
 
 
@@ -71,18 +61,13 @@ class CoinGeckoPriceConnector(BaseHTTPConnector):
             raise ValueError(f"CoinGecko returned no OHLC for {ticker}")
 
         rows = []
-        for ts, o, h, low_price, c in data:
-            rows.append(
-                {
-                    "ticker": ticker.upper(),
-                    "date": datetime.utcfromtimestamp(ts / 1000),
-                    "open": o,
-                    "high": h,
-                    "low": low_price,
-                    "close": c,
-                    "volume": 0,  # OHLC endpoint doesn't include volume
-                }
-            )
+        for ts, o, h, l, c in data:
+            rows.append({
+                "ticker": ticker.upper(),
+                "date": datetime.utcfromtimestamp(ts / 1000),
+                "open": o, "high": h, "low": l, "close": c,
+                "volume": 0,  # OHLC endpoint doesn't include volume
+            })
         df = pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
         return df
 
@@ -104,10 +89,7 @@ class CoinGeckoInfoConnector(BaseHTTPConnector):
             raise ConnectionError("CoinGecko: network disabled")
 
         coin_id = TICKER_MAP.get(ticker.upper(), ticker.lower())
-        url = (
-            f"{CG_BASE}/coins/{coin_id}?localization=false"
-            "&tickers=false&community_data=false&developer_data=false"
-        )
+        url = f"{CG_BASE}/coins/{coin_id}?localization=false&tickers=false&community_data=false&developer_data=false"
         logger.info("CoinGecko: fetching %s info", coin_id)
 
         data = self.get_json(url, cache_key=f"cg_info:{coin_id}")
@@ -153,7 +135,5 @@ class CoinGeckoGlobalConnector(BaseHTTPConnector):
             "btc_dominance": gd.get("market_cap_percentage", {}).get("btc", 0),
             "eth_dominance": gd.get("market_cap_percentage", {}).get("eth", 0),
             "active_cryptocurrencies": gd.get("active_cryptocurrencies", 0),
-            "market_cap_change_24h_pct": gd.get(
-                "market_cap_change_percentage_24h_usd", 0
-            ),
+            "market_cap_change_24h_pct": gd.get("market_cap_change_percentage_24h_usd", 0),
         }

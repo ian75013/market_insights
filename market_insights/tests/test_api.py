@@ -44,9 +44,7 @@ def test_etl_then_insight():
 
 
 def test_etl_batch():
-    etl = client.post(
-        "/etl/batch", params={"tickers": "MSFT,NVDA", "provider": "sample"}
-    )
+    etl = client.post("/etl/batch", params={"tickers": "MSFT,NVDA", "provider": "sample"})
     assert etl.status_code == 200
     body = etl.json()
     assert len(body) == 2

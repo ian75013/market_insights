@@ -23,12 +23,8 @@ class Settings(BaseSettings):
     sec_user_agent: str = "MarketInsights/1.0 contact@example.com"
 
     # ── LLM — multi-provider ──────────────────────────────────────
-    llm_backend: str = (
-        "fallback"  # fallback | openai | anthropic | mistral | groq | ollama | lmstudio
-    )
-    llm_model: str = (
-        ""  # model name override (e.g. gpt-4o, claude-sonnet-4-20250514, llama3)
-    )
+    llm_backend: str = "fallback"          # fallback | openai | anthropic | mistral | groq | ollama | lmstudio
+    llm_model: str = ""                    # model name override (e.g. gpt-4o, claude-sonnet-4-20250514, llama3)
 
     openai_api_key: str = ""
     anthropic_api_key: str = ""
@@ -46,7 +42,7 @@ class Settings(BaseSettings):
 
     # ── RAG ────────────────────────────────────────────────────────
     rag_embedding_model: str = "all-MiniLM-L6-v2"  # sentence-transformers model
-    rag_use_vectors: bool = True  # True=vector, False=lexical fallback
+    rag_use_vectors: bool = True                     # True=vector, False=lexical fallback
     rag_top_k: int = 5
     rag_chunk_size: int = 400
     rag_chunk_overlap: int = 60

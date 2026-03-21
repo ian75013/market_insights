@@ -22,7 +22,6 @@ class IBClient:
         self.available = False
         try:
             from ib_insync import IB  # type: ignore
-
             self._ib = IB()
             self.available = True
         except Exception:
@@ -33,9 +32,7 @@ class IBClient:
             return False
         if self._ib.isConnected():
             return True
-        self._ib.connect(
-            self.config.host, self.config.port, clientId=self.config.client_id
-        )
+        self._ib.connect(self.config.host, self.config.port, clientId=self.config.client_id)
         return self._ib.isConnected()
 
     def disconnect(self) -> None:

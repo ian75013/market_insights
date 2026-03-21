@@ -106,7 +106,7 @@ export default function App() {
         ) : (
           <>
             {tab === "overview" && <OverviewTab data={data} />}
-            {tab === "chandeliers" && <CandlestickTab data={data} />}
+            {tab === "chandeliers" && <CandlestickTab data={data} ticker={ticker} />}
             {tab === "technique" && <TechniqueTab data={data} />}
             {tab === "fondamentaux" && <FondamentauxTab data={data} />}
             {tab === "news" && <NewsTab data={data} macro={macro} />}

@@ -22,27 +22,7 @@ from market_insights.rag.embeddings import vector_store
 
 logger = logging.getLogger(__name__)
 
-STOPWORDS = {
-    "the",
-    "and",
-    "or",
-    "de",
-    "la",
-    "le",
-    "les",
-    "des",
-    "et",
-    "a",
-    "an",
-    "of",
-    "to",
-    "for",
-    "with",
-    "is",
-    "in",
-    "on",
-    "at",
-}
+STOPWORDS = {"the", "and", "or", "de", "la", "le", "les", "des", "et", "a", "an", "of", "to", "for", "with", "is", "in", "on", "at"}
 
 
 def _tokenize(text: str) -> list[str]:
@@ -62,33 +42,23 @@ def _lexical_score(query_tokens: list[str], text: str) -> float:
 
 def index_documents(db: Session, ticker: str) -> int:
     """Index all documents for a ticker into the vector store."""
-    rows = (
-        db.execute(select(Document).where(Document.ticker == ticker.upper()))
-        .scalars()
-        .all()
-    )
+    rows = db.execute(select(Document).where(Document.ticker == ticker.upper())).scalars().all()
     if not rows:
         return 0
 
     chunks = []
     for row in rows:
-        for chunk in chunk_text(
-            row.content,
-            chunk_size=settings.rag_chunk_size,
-            overlap=settings.rag_chunk_overlap,
-        ):
-            chunks.append(
-                {
-                    "text": chunk,
-                    "metadata": {
-                        "title": row.title,
-                        "source": row.source,
-                        "document_type": row.document_type,
-                        "url": row.url,
-                        "published_at": row.published_at,
-                    },
-                }
-            )
+        for chunk in chunk_text(row.content, chunk_size=settings.rag_chunk_size, overlap=settings.rag_chunk_overlap):
+            chunks.append({
+                "text": chunk,
+                "metadata": {
+                    "title": row.title,
+                    "source": row.source,
+                    "document_type": row.document_type,
+                    "url": row.url,
+                    "published_at": row.published_at,
+                },
+            })
 
     if not chunks:
         return 0
@@ -96,9 +66,7 @@ def index_documents(db: Session, ticker: str) -> int:
     return vector_store.index(ticker.upper(), chunks)
 
 
-def retrieve_context(
-    db: Session, ticker: str, query: str, top_k: int | None = None
-) -> list[dict]:
+def retrieve_context(db: Session, ticker: str, query: str, top_k: int | None = None) -> list[dict]:
     """Hybrid retrieval: vector search + lexical reranking."""
     top_k = top_k or settings.rag_top_k
     ticker = ticker.upper()
@@ -133,19 +101,17 @@ def retrieve_context(
         if key in seen:
             continue
         seen.add(key)
-        results.append(
-            {
-                "title": c.get("title", ""),
-                "source": c.get("source", ""),
-                "document_type": c.get("document_type", ""),
-                "url": c.get("url", ""),
-                "published_at": c.get("published_at", ""),
-                "content": c["text"],
-                "score": c["hybrid_score"],
-                "vector_score": c["score"],
-                "lexical_score": c["lexical_score"],
-            }
-        )
+        results.append({
+            "title": c.get("title", ""),
+            "source": c.get("source", ""),
+            "document_type": c.get("document_type", ""),
+            "url": c.get("url", ""),
+            "published_at": c.get("published_at", ""),
+            "content": c["text"],
+            "score": c["hybrid_score"],
+            "vector_score": c["score"],
+            "lexical_score": c["lexical_score"],
+        })
         if len(results) >= top_k:
             break
 
@@ -154,33 +120,23 @@ def retrieve_context(
 
 def _pure_lexical(db: Session, ticker: str, query: str, top_k: int) -> list[dict]:
     """Fallback lexical retrieval when vector store is empty."""
-    rows = (
-        db.execute(select(Document).where(Document.ticker == ticker.upper()))
-        .scalars()
-        .all()
-    )
+    rows = db.execute(select(Document).where(Document.ticker == ticker.upper())).scalars().all()
     if not rows:
         return []
     q = _tokenize(query + " " + ticker)
     scored: list[dict] = []
     for row in rows:
-        for chunk in chunk_text(
-            row.content,
-            chunk_size=settings.rag_chunk_size,
-            overlap=settings.rag_chunk_overlap,
-        ):
+        for chunk in chunk_text(row.content, chunk_size=settings.rag_chunk_size, overlap=settings.rag_chunk_overlap):
             score = _lexical_score(q, chunk + " " + row.title)
             if score > 0:
-                scored.append(
-                    {
-                        "title": row.title,
-                        "source": row.source,
-                        "document_type": row.document_type,
-                        "url": row.url,
-                        "published_at": row.published_at,
-                        "content": chunk,
-                        "score": round(score, 4),
-                    }
-                )
+                scored.append({
+                    "title": row.title,
+                    "source": row.source,
+                    "document_type": row.document_type,
+                    "url": row.url,
+                    "published_at": row.published_at,
+                    "content": chunk,
+                    "score": round(score, 4),
+                })
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:top_k]

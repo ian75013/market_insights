@@ -11,19 +11,9 @@ def _trend_label(short_up: bool, long_up: bool) -> tuple[str, str]:
     return "baissière", "baissière"
 
 
-def build_summary(
-    *,
-    technicals: dict,
-    fair_value: float,
-    current_price: float,
-    levels: dict,
-    signals: dict,
-    score: float,
-) -> dict:
+def build_summary(*, technicals: dict, fair_value: float, current_price: float, levels: dict, signals: dict, score: float) -> dict:
     short_up = bool(technicals.get("trend_signal", 0))
-    long_up = technicals.get("sma_50", 0.0) >= technicals.get(
-        "sma_200", technicals.get("sma_50", 0.0)
-    )
+    long_up = technicals.get("sma_50", 0.0) >= technicals.get("sma_200", technicals.get("sma_50", 0.0))
     trend_short, trend_long = _trend_label(short_up, long_up)
 
     premium_pct = ((fair_value / current_price) - 1.0) * 100 if current_price else 0.0
@@ -34,11 +24,7 @@ def build_summary(
     else:
         opinion = f"neutre entre {levels['support']:.2f} et {levels['resistance']:.2f}"
 
-    risk_note = (
-        "risque de consolidation à très court terme"
-        if signals["flags"].get("excess_rsi")
-        else "structure technique exploitable"
-    )
+    risk_note = "risque de consolidation à très court terme" if signals["flags"].get("excess_rsi") else "structure technique exploitable"
     if signals["flags"].get("volume_spike"):
         risk_note = "volumes actifs, scénario plus crédible"
 

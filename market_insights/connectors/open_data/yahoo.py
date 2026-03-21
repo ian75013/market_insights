@@ -13,6 +13,7 @@ Limits : no official rate limit but aggressive scraping may get throttled.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 import pandas as pd
 
@@ -40,9 +41,7 @@ class YFinancePriceConnector:
         return _YFINANCE_AVAILABLE
 
     @ttl_cache(seconds=settings.cache_ttl_prices, prefix="yf_prices")
-    def fetch(
-        self, ticker: str, period: str = "6mo", interval: str = "1d"
-    ) -> pd.DataFrame:
+    def fetch(self, ticker: str, period: str = "6mo", interval: str = "1d") -> pd.DataFrame:
         if not _YFINANCE_AVAILABLE:
             raise ImportError("yfinance is not installed. Run: pip install yfinance")
 

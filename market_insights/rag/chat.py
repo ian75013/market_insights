@@ -20,15 +20,13 @@ from market_insights.rag.store import retrieve_context
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT_FR = """Tu es un analyste financier expert
-spécialisé dans la recherche actions.
+SYSTEM_PROMPT_FR = """Tu es un analyste financier expert spécialisé dans la recherche actions.
 Tu réponds en français de manière structurée et factuelle.
 Tu cites tes sources en les référençant par [Source: titre].
 Tu ne donnes jamais de conseil en investissement personnalisé.
 Si les documents fournis ne contiennent pas assez d'information, dis-le clairement."""
 
-SYSTEM_PROMPT_EN = """You are an expert financial analyst
-specialized in equity research.
+SYSTEM_PROMPT_EN = """You are an expert financial analyst specialized in equity research.
 You answer in a structured, factual manner.
 You cite sources by referencing them as [Source: title].
 You never give personalized investment advice.
@@ -59,11 +57,7 @@ def rag_chat(
             f"[{i}] {src.get('title', 'Document')} ({src.get('document_type', '')}) "
             f"— score: {src.get('score', 0)}\n{src.get('content', '')}"
         )
-    context_block = (
-        "\n\n".join(context_parts)
-        if context_parts
-        else "Aucun document pertinent trouvé."
-    )
+    context_block = "\n\n".join(context_parts) if context_parts else "Aucun document pertinent trouvé."
 
     # 3. Augmented prompt
     prompt = f"""Ticker: {ticker}
@@ -72,8 +66,7 @@ Question: {question}
 Documents de contexte:
 {context_block}
 
-Réponds à la question en te basant sur les documents ci-dessus.
-Cite les sources pertinentes."""
+Réponds à la question en te basant sur les documents ci-dessus. Cite les sources pertinentes."""
 
     # 4. Generate
     system = SYSTEM_PROMPT_FR if language == "fr" else SYSTEM_PROMPT_EN

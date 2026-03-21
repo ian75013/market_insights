@@ -15,10 +15,7 @@ from market_insights.analysis.feature_engineering import compute_market_context
 from market_insights.analysis.signal_detection import detect_signals
 from market_insights.analysis.target_engine import compute_price_levels
 from market_insights.analysis.technical_scoring import build_summary
-from market_insights.connectors.open_data.fundamentals import (
-    MultiFundamentalsConnector,
-    SampleFundamentalsConnector,
-)
+from market_insights.connectors.open_data.fundamentals import MultiFundamentalsConnector, SampleFundamentalsConnector
 from market_insights.core.config import settings
 from market_insights.db.models import PriceBar
 from market_insights.etl.transformers.features import compute_features
@@ -43,15 +40,9 @@ class MarketInsightService:
         return SampleFundamentalsConnector().fetch(ticker)
 
     def _load_df(self, db: Session, ticker: str) -> pd.DataFrame:
-        rows = (
-            db.execute(
-                select(PriceBar)
-                .where(PriceBar.ticker == ticker.upper())
-                .order_by(PriceBar.date.asc())
-            )
-            .scalars()
-            .all()
-        )
+        rows = db.execute(
+            select(PriceBar).where(PriceBar.ticker == ticker.upper()).order_by(PriceBar.date.asc())
+        ).scalars().all()
         if not rows:
             raise ValueError(f"No price data found for ticker={ticker}. Run ETL first.")
         return pd.DataFrame(
@@ -87,28 +78,14 @@ class MarketInsightService:
         }
 
     def get_rag_sources(self, db: Session, ticker: str) -> list[dict]:
-        return retrieve_context(
-            db,
-            ticker.upper(),
-            query="earnings growth debt valuation risk catalysts",
-            top_k=5,
-        )
+        return retrieve_context(db, ticker.upper(), query="earnings growth debt valuation risk catalysts", top_k=5)
 
     def generate_insight(self, db: Session, ticker: str) -> dict:
         ticker = ticker.upper()
         df = compute_features(self._load_df(db, ticker))
         fair = self.compute_fair_value(db, ticker)
         technicals = df.iloc[-1][
-            [
-                "rsi_14",
-                "volatility_20",
-                "trend_signal",
-                "momentum_20",
-                "drawdown",
-                "sma_20",
-                "sma_50",
-                "sma_200",
-            ]
+            ["rsi_14", "volatility_20", "trend_signal", "momentum_20", "drawdown", "sma_20", "sma_50", "sma_200"]
         ].to_dict()
         fundamentals = self._get_fundamentals(ticker)
         rag_context = self.get_rag_sources(db, ticker)
@@ -122,8 +99,7 @@ class MarketInsightService:
                     + 0.18 * (1 if technicals["trend_signal"] else 0)
                     + 0.20 * max(-0.2, min(0.2, technicals["momentum_20"]))
                     + 0.12 * fair["confidence"]
-                    + 0.12
-                    * max(-0.1, min(0.3, fundamentals.get("revenue_growth", 0.0)))
+                    + 0.12 * max(-0.1, min(0.3, fundamentals.get("revenue_growth", 0.0)))
                     - 0.08 * max(0.0, fundamentals.get("debt_to_equity", 1.0) - 1.5),
                 ),
             ),
@@ -169,24 +145,18 @@ class MarketInsightService:
             "fundamental_rag": {
                 "summary": (
                     f"Croissance CA {fundamentals.get('revenue_growth', 'n/a')}, "
-                    f"EPS {fundamentals.get('eps_growth', 'n/a')}, "
-                    f"dette {fundamentals.get('debt_to_equity', 'n/a')}"
+                    f"EPS {fundamentals.get('eps_growth', 'n/a')}, dette {fundamentals.get('debt_to_equity', 'n/a')}"
                 ),
                 "sources": rag_context,
             },
             "narrative": analysis,
-            "disclaimer": (
-                "Contenu informatif et analytique, non personnalisé, "
-                "ne constituant pas un conseil en investissement."
-            ),
+            "disclaimer": "Contenu informatif et analytique, non personnalisé, ne constituant pas un conseil en investissement.",
         }
 
         # ── Scores dict for hybrid service ─────────────────────────
         scores = {
             "overall_score": score,
-            "trend_score": 0.55
-            + 0.25 * float(technicals["trend_signal"])
-            + 0.15 * technicals["momentum_20"],
+            "trend_score": 0.55 + 0.25 * float(technicals["trend_signal"]) + 0.15 * technicals["momentum_20"],
             "confidence_score": fair["confidence"],
         }
 

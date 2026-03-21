@@ -17,10 +17,7 @@ import logging
 import pandas as pd
 
 from market_insights.connectors.ibkr.historical import IBHistoricalFetcher
-from market_insights.connectors.open_data.prices import (
-    SamplePriceConnector,
-    StooqPriceConnector,
-)
+from market_insights.connectors.open_data.prices import SamplePriceConnector, StooqPriceConnector
 from market_insights.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -47,79 +44,41 @@ class PriceProviderRouter:
         }
         fetcher = dispatch.get(provider)
         if fetcher is None:
-            raise ValueError(
-                f"Unknown provider={provider}. Available: {', '.join(dispatch.keys())}"
-            )
+            raise ValueError(f"Unknown provider={provider}. Available: {', '.join(dispatch.keys())}")
         return fetcher(ticker)
 
     def available_providers(self) -> list[dict]:
         """List all providers and their availability status."""
         providers = [
-            {
-                "name": "sample",
-                "available": True,
-                "needs_key": False,
-                "needs_network": False,
-            },
-            {
-                "name": "stooq",
-                "available": self.use_network,
-                "needs_key": False,
-                "needs_network": True,
-            },
+            {"name": "sample", "available": True, "needs_key": False, "needs_network": False},
+            {"name": "stooq", "available": self.use_network, "needs_key": False, "needs_network": True},
         ]
         # Yahoo
         try:
-            from market_insights.connectors.open_data.yahoo import (
-                YFinancePriceConnector,
-            )
-
-            providers.append(
-                {
-                    "name": "yahoo",
-                    "available": YFinancePriceConnector.available()
-                    and self.use_network,
-                    "needs_key": False,
-                    "needs_network": True,
-                }
-            )
+            from market_insights.connectors.open_data.yahoo import YFinancePriceConnector
+            providers.append({
+                "name": "yahoo", "available": YFinancePriceConnector.available() and self.use_network,
+                "needs_key": False, "needs_network": True,
+            })
         except Exception:
-            providers.append(
-                {
-                    "name": "yahoo",
-                    "available": False,
-                    "needs_key": False,
-                    "needs_network": True,
-                }
-            )
+            providers.append({"name": "yahoo", "available": False, "needs_key": False, "needs_network": True})
 
         # Alpha Vantage
-        providers.append(
-            {
-                "name": "alpha_vantage",
-                "available": bool(settings.alpha_vantage_api_key) and self.use_network,
-                "needs_key": True,
-                "needs_network": True,
-            }
-        )
+        providers.append({
+            "name": "alpha_vantage",
+            "available": bool(settings.alpha_vantage_api_key) and self.use_network,
+            "needs_key": True, "needs_network": True,
+        })
         # CoinGecko
-        providers.append(
-            {
-                "name": "coingecko",
-                "available": self.use_network,
-                "needs_key": False,
-                "needs_network": True,
-            }
-        )
+        providers.append({
+            "name": "coingecko", "available": self.use_network,
+            "needs_key": False, "needs_network": True,
+        })
         # IBKR
-        providers.append(
-            {
-                "name": "ibkr",
-                "available": False,  # needs TWS running
-                "needs_key": False,
-                "needs_network": True,
-            }
-        )
+        providers.append({
+            "name": "ibkr", "available": False,  # needs TWS running
+            "needs_key": False, "needs_network": True,
+        })
         return providers
 
     # ── Individual provider methods ────────────────────────────────
@@ -132,21 +91,14 @@ class PriceProviderRouter:
 
     def _from_yahoo(self, ticker: str) -> pd.DataFrame:
         from market_insights.connectors.open_data.yahoo import YFinancePriceConnector
-
         return YFinancePriceConnector().fetch(ticker)
 
     def _from_alpha_vantage(self, ticker: str) -> pd.DataFrame:
-        from market_insights.connectors.open_data.alpha_vantage import (
-            AlphaVantagePriceConnector,
-        )
-
+        from market_insights.connectors.open_data.alpha_vantage import AlphaVantagePriceConnector
         return AlphaVantagePriceConnector().fetch(ticker)
 
     def _from_coingecko(self, ticker: str) -> pd.DataFrame:
-        from market_insights.connectors.open_data.coingecko import (
-            CoinGeckoPriceConnector,
-        )
-
+        from market_insights.connectors.open_data.coingecko import CoinGeckoPriceConnector
         return CoinGeckoPriceConnector(use_network=self.use_network).fetch(ticker)
 
     def _from_ibkr(self, ticker: str) -> pd.DataFrame:
@@ -178,6 +130,4 @@ class PriceProviderRouter:
                 errors.append(f"{name}: {exc}")
                 logger.debug("Provider %s failed for %s: %s", name, ticker, exc)
 
-        raise ValueError(
-            f"No price data for {ticker} from any provider. Errors: {'; '.join(errors)}"
-        )
+        raise ValueError(f"No price data for {ticker} from any provider. Errors: {'; '.join(errors)}")
