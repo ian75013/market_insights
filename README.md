@@ -4,6 +4,40 @@ Plateforme de recherche actions avec **chandeliers annotés**, **RAG vectoriel**
 
 ## Démarrage
 
+### Docker (recommandé)
+
+```bash
+docker compose up --build
+```
+→ API : http://localhost:8000/docs · Frontend : http://localhost:3080
+
+**LLM local intégré** — Ollama + tinyllama (1.1B, super léger ~1.5GB) démarre automatiquement avec le compose. Détection intelligente : le modèle se télécharge une seule fois au premier boot, puis est réutilisé aux redémarrages. Pas de fallback LLM, chat RAG fonctionne immédiatement.
+
+Parametres de demarrage robustes (via variables d'environnement):
+
+- `MI_RUN_SEED` : execute le seed au boot (`true` en dev, `false` recommande en prod)
+- `MI_WAIT_DNS` : active un precheck DNS au demarrage (`true` recommande)
+- `MI_API_RELOAD` : mode reload Uvicorn (dev uniquement)
+- `MI_API_WORKERS` : nombre de workers Uvicorn (prod)
+- `LLM_BACKEND` : provider LLM (`ollama` par défaut désormais)
+- `LLM_MODEL` : modèle (`tinyllama` par défaut, 1.1B très léger)
+
+En production, lancer de preference sans seed automatique:
+
+```bash
+MI_RUN_SEED=false docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Changeer le modèle Ollama (ex: phi pour meilleure qualité mais un peu plus lourd):
+
+```bash
+LLM_MODEL=phi docker compose up --build
+```
+
+Le modèle se téléchargera à la première run, puis sera réutilisé.
+
+### Sans Docker
+
 ```bash
 pip install -r requirements.txt
 python -m market_insights.scripts.seed_demo_data
@@ -16,7 +50,7 @@ cd market_insights/frontend-react
 npm install
 npm run dev
 ```
-→ http://localhost:3000 (6 onglets : Overview, Chandeliers, Technique, Fondamentaux, News, RAG Chat)
+→ http://localhost:3080 (6 onglets : Overview, Chandeliers, Technique, Fondamentaux, News, RAG Chat)
 
 ## Chandeliers annotés
 
@@ -338,13 +372,39 @@ Le projet comporte 40 tests répartis dans 15 fichiers :
 
 ## Docker
 
+Deux fichiers Compose selon l'environnement :
+
+### Développement
+
 ```bash
 docker compose up --build
 ```
 
-Le `docker-compose.yml` lance le backend avec seed automatique des données de démo. Le backend écoute sur le port 8000.
+`docker-compose.yml` lance une stack légère sans PostgreSQL ni nginx :
 
-Pour le frontend en production, le dossier `frontend-react/` inclut un `Dockerfile` séparé qui build l'application React et la sert via nginx.
+- **API** — SQLite, `uvicorn --reload` (hot-reload), code monté en volume, seed automatique des données de démo. Port 8000.
+- **Frontend** — Vite dev server avec HMR, `node_modules` isolés dans un volume Docker. Port 3080.
+
+→ API : http://localhost:8000/docs
+→ Frontend : http://localhost:3080
+
+Le proxy Vite redirige `/api/*` vers le conteneur API. La cible est configurable via `VITE_PROXY_TARGET` (défaut : `http://api:8000` en Docker, `http://127.0.0.1:8000` en local hors Docker).
+
+### Production
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+`docker-compose.prod.yml` lance la stack complète :
+
+- **PostgreSQL 16** — Données persistées dans un volume `pg-data`. Healthcheck `pg_isready`.
+- **API** — 2 workers uvicorn, `DATABASE_URL` pointant vers PostgreSQL, seed automatique.
+- **Frontend** — Build React statique servi par un nginx interne (multi-stage Dockerfile).
+- **Nginx** — Reverse proxy, terminaison SSL (Let's Encrypt), redirection HTTP→HTTPS.
+- **Certbot** — Renouvellement automatique des certificats toutes les 12h.
+
+Requiert un fichier `.env` avec au minimum `POSTGRES_PASSWORD`. Voir `doc/DEPLOIEMENT_OVH.md` pour le premier déploiement et l'obtention du certificat SSL.
 
 ---
 

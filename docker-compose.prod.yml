@@ -1,0 +1,163 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Market Insights — docker-compose.prod.yml  (production)
+#
+#  Stack complète :
+#    PostgreSQL 16 · FastAPI (2 workers) · React build (nginx)
+#    Nginx reverse proxy (SSL) · Certbot auto-renew
+#
+#  Prérequis :
+#    - Fichier .env avec au minimum POSTGRES_PASSWORD
+#    - DNS pointant vers le serveur pour le certificat SSL
+#    - Premier run : activer market-insight-init.conf.disabled
+#      pour obtenir le certificat (voir doc/DEPLOIEMENT_OVH.md)
+#
+#  Lancement :
+#    docker compose -f docker-compose.prod.yml up -d --build
+#
+#  → https://market-insight.doctumconsilium.com
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+services:
+
+  # ── Base de données ─────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: mi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-market_insights}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?⚠ POSTGRES_PASSWORD requis dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-market_insights}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market_insights}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mi-net
+
+  # ── API FastAPI ─────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: mi-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql://${POSTGRES_USER:-market_insights}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-market_insights}
+      USE_NETWORK: ${USE_NETWORK:-true}
+      DEFAULT_PRICE_PROVIDER: ${DEFAULT_PRICE_PROVIDER:-auto}
+      LLM_BACKEND: ${LLM_BACKEND:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-tinyllama}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MI_RUN_SEED: ${MI_RUN_SEED:-false}
+      MI_API_RELOAD: "false"
+      MI_API_WORKERS: ${MI_API_WORKERS:-2}
+      MI_WAIT_DNS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    command:
+      - sh
+      - /app/deploy/start_api.sh
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - mi-net
+
+  # ── LLM local (Ollama + llama3:1b) ──────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mi-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        ollama serve &
+        sleep 5
+        if ! ollama list | grep -q tinyllama; then
+          echo '[ollama] Model not found, pulling tinyllama (1.1B, ~1.5GB)...'
+          ollama pull tinyllama
+        else
+          echo '[ollama] tinyllama already available'
+        fi
+        wait
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ollama list | grep -q tinyllama"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+    networks:
+      - mi-net
+  frontend:
+    build:
+      context: ./market_insights/frontend-react
+      args:
+        VITE_API_BASE: /api
+    container_name: mi-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - mi-net
+
+  # ── Reverse proxy + SSL ─────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mi-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - mi-net
+
+  # ── Renouvellement automatique des certificats ──────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: mi-certbot
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c 'trap exit TERM;
+      while :; do certbot renew; sleep 12h & wait $${!}; done;'
+    networks:
+      - mi-net
+
+volumes:
+  pg-data:
+  ollama-data:
+  certbot-conf:
+  certbot-www:
+
+networks:
+  mi-net:
+    driver: bridge

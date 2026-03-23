@@ -1,91 +1,108 @@
-services:
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  Market Insights — docker-compose.yml  (développement)
+#
+#  Backend  : SQLite, uvicorn --reload, code monté en volume
+#  Frontend : Vite dev server (HMR sur port 3080)
+#  Pas de nginx · Pas de certbot · Pas de PostgreSQL
+#
+#  Lancement :
+#    docker compose up --build
+#
+#  → API      http://localhost:8000/docs
+#  → Frontend http://localhost:3080
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  db:
-    image: postgres:16-alpine
-    container_name: mi-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-market_insights}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-market_insights}
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market_insights}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - mi-net
+services:
 
   api:
     build: .
-    container_name: mi-api
-    restart: unless-stopped
-    env_file: .env
+    container_name: mi-api-dev
+    env_file:
+      - path: .env
+        required: false
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-market_insights}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-market_insights}
-    depends_on:
-      db:
-        condition: service_healthy
-    command: >
-      sh -c "python -m market_insights.scripts.seed_demo_data &&
-             uvicorn market_insights.api.main:app --host 0.0.0.0 --port 8000 --workers 2"
+      APP_ENV: dev
+      DATABASE_URL: sqlite:///./market_insights.db
+      USE_NETWORK: ${USE_NETWORK:-true}
+      DEFAULT_PRICE_PROVIDER: ${DEFAULT_PRICE_PROVIDER:-auto}
+      LLM_BACKEND: ${LLM_BACKEND:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-tinyllama}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MI_RUN_SEED: "true"
+      MI_API_RELOAD: "true"
+      MI_API_WORKERS: "1"
+      MI_WAIT_DNS: "true"
+    volumes:
+      # Hot-reload : le code source est monté, pas copié dans l'image
+      - .:/app
+      # Persister la DB SQLite entre les redémarrages
+      - sqlite-data:/app/data
+    ports:
+      - "8000:8000"
+    command:
+      - sh
+      - /app/deploy/start_api.sh
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
-      interval: 30s
+      interval: 15s
       timeout: 5s
       retries: 3
-    networks:
-      - mi-net
+      start_period: 90s
 
   frontend:
-    build:
-      context: ./market_insights/frontend-react
-      args:
-        VITE_API_BASE: /api
-    container_name: mi-frontend
-    restart: unless-stopped
-    depends_on:
-      api:
-        condition: service_healthy
-    networks:
-      - mi-net
-
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: mi-nginx
-    restart: unless-stopped
+    image: node:20-alpine
+    container_name: mi-frontend-dev
+    working_dir: /app
+    volumes:
+      - ./market_insights/frontend-react:/app
+      # Isoler node_modules du host pour éviter les conflits linux/mac
+      - frontend-node-modules:/app/node_modules
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
-      - certbot-conf:/etc/letsencrypt:ro
-      - certbot-www:/var/www/certbot:ro
+      - "3080:3080"
+    environment:
+      # Le browser appelle /api/*, Vite proxy redirige vers le conteneur api
+      VITE_API_BASE: /api
+      # Cible du proxy Vite : nom du service Docker (pas localhost)
+      VITE_PROXY_TARGET: http://api:8000
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       api:
         condition: service_healthy
-      frontend:
-        condition: service_started
-    networks:
-      - mi-net
 
-  certbot:
-    image: certbot/certbot:latest
-    container_name: mi-certbot
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mi-ollama-dev
+    restart: unless-stopped
     volumes:
-      - certbot-conf:/etc/letsencrypt
-      - certbot-www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    networks:
-      - mi-net
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        ollama serve &
+        sleep 5
+        if ! ollama list | grep -q tinyllama; then
+          echo '[ollama] Model not found, pulling tinyllama (1.1B, ~1.5GB)...'
+          ollama pull tinyllama
+        else
+          echo '[ollama] tinyllama already available'
+        fi
+        wait
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ollama list | grep -q tinyllama"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
 
 volumes:
-  pg-data:
-  certbot-conf:
-  certbot-www:
-
-networks:
-  mi-net:
-    driver: bridge
+  sqlite-data:
+  frontend-node-modules:
+  ollama-data:

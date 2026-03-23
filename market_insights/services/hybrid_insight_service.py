@@ -12,9 +12,31 @@ class HybridInsightService:
         self.market_service = MarketInsightService()
 
     def generate_hybrid_insight(self, db: Session, ticker: str) -> dict[str, Any]:
-        insight = self.market_service.generate_insight(db, ticker)
-        fair_value = self.market_service.compute_fair_value(db, ticker)
-        rag_sources = self.market_service.get_rag_sources(db, ticker)
+        # Each sub-call is wrapped individually so one failure
+        # doesn't bring down the whole hybrid response.
+        try:
+            insight = self.market_service.generate_insight(db, ticker)
+        except Exception as exc:
+            raise ValueError(
+                f"Hybrid: generate_insight failed for {ticker}: {exc}"
+            ) from exc
+
+        try:
+            fair_value = self.market_service.compute_fair_value(db, ticker)
+        except Exception:
+            # Fallback: extract fair_value from the insight that succeeded
+            fair_value = {
+                "fair_value": insight.get("fair_value", 0),
+                "current_price": insight.get("last_price", 0),
+                "upside_pct": 0,
+                "confidence": insight.get("scores", {}).get("confidence_score", 0),
+            }
+
+        try:
+            rag_sources = self.market_service.get_rag_sources(db, ticker)
+        except Exception:
+            rag_sources = []
+
         comparable = insight.get("comparable", {})
         current_price = float(insight.get("last_price") or 0.0)
         model_price = float(fair_value.get("fair_value") or current_price or 0.0)
