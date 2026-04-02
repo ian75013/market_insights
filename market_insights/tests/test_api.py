@@ -20,6 +20,8 @@ def test_sources_endpoint():
     assert "yahoo" in body["price_providers"]
     assert "auto" in body["price_providers"]
     assert "multi" in body["fundamentals_providers"]
+    assert "litellm" in body["llm_providers"]
+    assert "ollama" not in body["llm_providers"]
 
 
 def test_providers_endpoint():
@@ -28,6 +30,29 @@ def test_providers_endpoint():
     body = response.json()
     assert "price_providers" in body
     assert "api_keys_configured" in body
+
+
+def test_llm_providers_endpoint_hides_ollama():
+    response = client.get("/llm/providers")
+    assert response.status_code == 200
+    body = response.json()
+    names = [provider["name"] for provider in body["providers"]]
+    assert body["active_backend"] == "litellm"
+    assert "litellm" in names
+    assert "ollama" not in names
+
+
+def test_llm_chat_rejects_ollama_backend():
+    response = client.post(
+        "/llm/chat",
+        json={
+            "ticker": "AAPL",
+            "question": "test",
+            "llm_backend": "ollama",
+        },
+    )
+    assert response.status_code == 400
+    assert "Utilise 'litellm'" in response.json()["detail"]
 
 
 def test_etl_then_insight():

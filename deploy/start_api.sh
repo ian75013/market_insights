@@ -13,6 +13,8 @@ echo "[start_api] starting Market Insights API"
 : "${MI_API_PORT:=8000}"
 : "${MI_API_WORKERS:=1}"
 : "${MI_API_RELOAD:=false}"
+: "${MI_API_PROXY_HEADERS:=false}"
+: "${MI_API_FORWARDED_ALLOW_IPS:=*}"
 
 if [ "$MI_WAIT_DNS" = "true" ]; then
   echo "[start_api] dns precheck enabled for hosts: $MI_DNS_HOSTS"
@@ -49,6 +51,15 @@ fi
 
 if [ "$MI_API_RELOAD" = "true" ]; then
   echo "[start_api] launching uvicorn in reload mode on ${MI_API_HOST}:${MI_API_PORT}"
+  if [ "$MI_API_PROXY_HEADERS" = "true" ]; then
+    exec uvicorn market_insights.api.main:app \
+      --host "$MI_API_HOST" \
+      --port "$MI_API_PORT" \
+      --proxy-headers \
+      --forwarded-allow-ips "$MI_API_FORWARDED_ALLOW_IPS" \
+      --reload \
+      --reload-dir market_insights
+  fi
   exec uvicorn market_insights.api.main:app \
     --host "$MI_API_HOST" \
     --port "$MI_API_PORT" \
@@ -57,6 +68,14 @@ if [ "$MI_API_RELOAD" = "true" ]; then
 fi
 
 echo "[start_api] launching uvicorn with ${MI_API_WORKERS} worker(s) on ${MI_API_HOST}:${MI_API_PORT}"
+if [ "$MI_API_PROXY_HEADERS" = "true" ]; then
+  exec uvicorn market_insights.api.main:app \
+    --host "$MI_API_HOST" \
+    --port "$MI_API_PORT" \
+    --workers "$MI_API_WORKERS" \
+    --proxy-headers \
+    --forwarded-allow-ips "$MI_API_FORWARDED_ALLOW_IPS"
+fi
 exec uvicorn market_insights.api.main:app \
   --host "$MI_API_HOST" \
   --port "$MI_API_PORT" \

@@ -1,0 +1,97 @@
+# ================================================================
+# Market Insights - OVH deployment behind host Apache2 reverse proxy
+#
+# This stack exposes only local host ports:
+#   - API      -> 127.0.0.1:18000
+#   - Frontend -> 127.0.0.1:18080
+#
+# Apache2 on the VPS must proxy:
+#   /api/* -> 127.0.0.1:18000
+#   /*     -> 127.0.0.1:18080
+# ================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-market_insights}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-market_insights}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-market_insights}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mi-net
+
+  api:
+    build: .
+    container_name: mi-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql://${POSTGRES_USER:-market_insights}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-market_insights}
+      USE_NETWORK: ${USE_NETWORK:-true}
+      DEFAULT_PRICE_PROVIDER: ${DEFAULT_PRICE_PROVIDER:-auto}
+      LLM_BACKEND: ${LLM_BACKEND:-litellm}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MI_RUN_SEED: ${MI_RUN_SEED:-false}
+      MI_API_RELOAD: "false"
+      MI_API_WORKERS: ${MI_API_WORKERS:-2}
+      MI_WAIT_DNS: "true"
+      MI_API_PROXY_HEADERS: "true"
+      MI_API_FORWARDED_ALLOW_IPS: "*"
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - sh
+      - /app/deploy/start_api.sh
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "127.0.0.1:18000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+    networks:
+      - mi-net
+      - litellm-shared
+
+  frontend:
+    build:
+      context: ./market_insights/frontend-react
+      args:
+        VITE_API_BASE: /api
+    container_name: mi-frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:80"
+    networks:
+      - mi-net
+
+volumes:
+  pg-data:
+
+networks:
+  mi-net:
+    driver: bridge
+  litellm-shared:
+    external: true
+    name: ${LITELLM_SHARED_NETWORK:-litellm-gateway-vps_llmnet}

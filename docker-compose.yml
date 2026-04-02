@@ -25,8 +25,10 @@ services:
       DATABASE_URL: sqlite:///./market_insights.db
       USE_NETWORK: ${USE_NETWORK:-true}
       DEFAULT_PRICE_PROVIDER: ${DEFAULT_PRICE_PROVIDER:-auto}
-      LLM_BACKEND: ${LLM_BACKEND:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-tinyllama}
+      LLM_BACKEND: ${LLM_BACKEND:-litellm}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
       MI_RUN_SEED: "true"
       MI_API_RELOAD: "true"
@@ -45,6 +47,9 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    networks:
+      - mi-net
+      - litellm-shared
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
       interval: 15s
@@ -71,38 +76,17 @@ services:
     depends_on:
       api:
         condition: service_healthy
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: mi-ollama-dev
-    restart: unless-stopped
-    volumes:
-      - ollama-data:/root/.ollama
-    ports:
-      - "11434:11434"
-    environment:
-      OLLAMA_HOST: 0.0.0.0:11434
-    entrypoint: /bin/sh
-    command:
-      - -c
-      - |
-        ollama serve &
-        sleep 5
-        if ! ollama list | grep -q tinyllama; then
-          echo '[ollama] Model not found, pulling tinyllama (1.1B, ~1.5GB)...'
-          ollama pull tinyllama
-        else
-          echo '[ollama] tinyllama already available'
-        fi
-        wait
-    healthcheck:
-      test: ["CMD", "sh", "-c", "ollama list | grep -q tinyllama"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 180s
+    networks:
+      - mi-net
 
 volumes:
   sqlite-data:
   frontend-node-modules:
   ollama-data:
+
+networks:
+  mi-net:
+    driver: bridge
+  litellm-shared:
+    external: true
+    name: ${LITELLM_SHARED_NETWORK:-litellm-gateway-vps_llmnet}

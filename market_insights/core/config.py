@@ -24,16 +24,19 @@ class Settings(BaseSettings):
 
     # ── LLM — multi-provider ──────────────────────────────────────
     llm_backend: str = (
-        "fallback"  # fallback | openai | anthropic | mistral | groq | ollama | lmstudio
+        "litellm"  # litellm | openai | anthropic | mistral | groq | lmstudio | fallback
     )
     llm_model: str = (
-        ""  # model name override (e.g. gpt-4o, claude-sonnet-4-20250514, llama3)
+        ""  # model name override (e.g. local-private, gpt-4o, claude-sonnet-4-20250514)
     )
 
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     mistral_api_key: str = ""
     groq_api_key: str = ""
+
+    litellm_base_url: str = "http://litellm:4000"
+    litellm_api_key: str = ""
 
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"

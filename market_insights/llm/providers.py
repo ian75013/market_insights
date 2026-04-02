@@ -24,6 +24,8 @@ from market_insights.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_HIDDEN_PROVIDERS = {"ollama"}
+
 
 @dataclass
 class LLMResponse:
@@ -51,6 +53,122 @@ class BaseLLMProvider(ABC):
 
     def models(self) -> list[str]:
         return []
+
+
+class LiteLLMProvider(BaseLLMProvider):
+    name = "litellm"
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if settings.litellm_api_key:
+            headers["Authorization"] = f"Bearer {settings.litellm_api_key}"
+        return headers
+
+    def _base_url(self) -> str:
+        return settings.litellm_base_url.rstrip("/")
+
+    def available(self) -> bool:
+        try:
+            resp = httpx.get(
+                f"{self._base_url()}/v1/models",
+                headers=self._headers(),
+                timeout=3,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def models(self) -> list[str]:
+        try:
+            resp = httpx.get(
+                f"{self._base_url()}/v1/models",
+                headers=self._headers(),
+                timeout=5,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return [m["id"] for m in data.get("data", [])]
+        except Exception:
+            return [settings.llm_model] if settings.llm_model else []
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMResponse:
+        model = settings.llm_model or "local-private"
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        with httpx.Client(timeout=120) as client:
+            resp = client.post(
+                f"{self._base_url()}/v1/chat/completions",
+                headers=self._headers(),
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature or settings.llm_temperature,
+                    "max_tokens": max_tokens or settings.llm_max_tokens,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return LLMResponse(
+            text=data["choices"][0]["message"]["content"],
+            model=model,
+            provider="litellm",
+            usage=data.get("usage"),
+        )
+
+    def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system: str = "",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        import json as _json
+
+        model = settings.llm_model or "local-private"
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        with httpx.Client(timeout=120) as client:
+            with client.stream(
+                "POST",
+                f"{self._base_url()}/v1/chat/completions",
+                headers=self._headers(),
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature or settings.llm_temperature,
+                    "max_tokens": max_tokens or settings.llm_max_tokens,
+                    "stream": True,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        line = line[6:]
+                    if line == "[DONE]":
+                        break
+                    try:
+                        data = _json.loads(line)
+                    except Exception:
+                        continue
+                    choices = data.get("choices") or []
+                    delta = choices[0].get("delta", {}) if choices else {}
+                    token = delta.get("content", "")
+                    if token:
+                        yield token
 
 
 # ━━ OpenAI ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -462,6 +580,7 @@ class FallbackProvider(BaseLLMProvider):
 # ━━ Registry ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 _PROVIDERS: dict[str, type[BaseLLMProvider]] = {
+    "litellm": LiteLLMProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "mistral": MistralProvider,
@@ -470,6 +589,16 @@ _PROVIDERS: dict[str, type[BaseLLMProvider]] = {
     "lmstudio": LMStudioProvider,
     "fallback": FallbackProvider,
 }
+
+
+def is_public_provider(name: str | None) -> bool:
+    if not name:
+        return True
+    return name.lower() not in _HIDDEN_PROVIDERS
+
+
+def public_provider_names() -> list[str]:
+    return [name for name in _PROVIDERS if is_public_provider(name)]
 
 
 def get_llm(backend: str | None = None) -> BaseLLMProvider:
@@ -486,6 +615,8 @@ def list_providers() -> list[dict]:
     """List all providers with availability status."""
     result = []
     for name, cls in _PROVIDERS.items():
+        if not is_public_provider(name):
+            continue
         inst = cls()
         try:
             avail = inst.available()

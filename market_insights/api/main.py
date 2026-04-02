@@ -23,6 +23,7 @@ from market_insights.schemas.market import FairValueResponse
 from market_insights.services.etl_service import run_batch_etl, run_etl
 from market_insights.services.hybrid_insight_service import HybridInsightService
 from market_insights.services.market_service import MarketInsightService
+from market_insights.llm.providers import is_public_provider, list_providers, public_provider_names
 
 init_db()
 
@@ -50,6 +51,20 @@ app.add_middleware(
 
 service = MarketInsightService()
 hybrid_service = HybridInsightService()
+
+
+def _validate_llm_backend(backend: str | None) -> str | None:
+    if backend and not is_public_provider(backend):
+        raise HTTPException(
+            status_code=400,
+            detail="Le provider 'ollama' n'est pas exposé par l'application. Utilise 'litellm'.",
+        )
+    return backend
+
+
+def _active_public_backend() -> str:
+    backend = (settings.llm_backend or "litellm").lower()
+    return backend if is_public_provider(backend) else "litellm"
 
 
 # ━━ Health & Info ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -88,13 +103,7 @@ def sources():
         "news_providers": ["sample", "rss", "alpha_vantage", "multi"],
         "macro_providers": ["sample", "fred"],
         "llm_providers": [
-            "openai",
-            "anthropic",
-            "mistral",
-            "groq",
-            "ollama",
-            "lmstudio",
-            "fallback",
+            *public_provider_names(),
         ],
     }
 
@@ -109,6 +118,7 @@ def providers():
             "alpha_vantage": bool(settings.alpha_vantage_api_key),
             "fred": bool(settings.fred_api_key),
             "fmp": bool(settings.fmp_api_key),
+            "litellm": bool(settings.litellm_api_key),
             "openai": bool(settings.openai_api_key),
             "anthropic": bool(settings.anthropic_api_key),
             "mistral": bool(settings.mistral_api_key),
@@ -307,9 +317,7 @@ def macro_dashboard():
 @app.get("/llm/providers", tags=["llm"])
 def llm_providers():
     """List all LLM providers with availability and model lists."""
-    from market_insights.llm.providers import list_providers
-
-    return {"providers": list_providers(), "active_backend": settings.llm_backend}
+    return {"providers": list_providers(), "active_backend": _active_public_backend()}
 
 
 class ChatRequest(BaseModel):
@@ -327,11 +335,12 @@ def llm_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
         from market_insights.rag.chat import rag_chat
 
+        llm_backend = _validate_llm_backend(req.llm_backend)
         return rag_chat(
             db,
             ticker=req.ticker,
             question=req.question,
-            llm_backend=req.llm_backend,
+            llm_backend=llm_backend,
             llm_model=req.llm_model,
             language=req.language,
             top_k=req.top_k,
@@ -347,10 +356,12 @@ def llm_chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
     """RAG chat with Server-Sent Events streaming."""
     from market_insights.rag.chat import rag_chat_stream
 
+    llm_backend = _validate_llm_backend(req.llm_backend)
+
     def gen():
         yield from rag_chat_stream(
             db, ticker=req.ticker, question=req.question,
-            llm_backend=req.llm_backend, llm_model=req.llm_model,
+            llm_backend=llm_backend, llm_model=req.llm_model,
             language=req.language, top_k=req.top_k,
         )
 

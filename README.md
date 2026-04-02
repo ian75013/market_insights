@@ -11,7 +11,42 @@ docker compose up --build
 ```
 → API : http://localhost:8000/docs · Frontend : http://localhost:3080
 
-**LLM local intégré** — Ollama + tinyllama (1.1B, super léger ~1.5GB) démarre automatiquement avec le compose. Détection intelligente : le modèle se télécharge une seule fois au premier boot, puis est réutilisé aux redémarrages. Pas de fallback LLM, chat RAG fonctionne immédiatement.
+**LLM par défaut** — le compose utilise ton gateway LiteLLM partagé sur le réseau Docker `litellm-gateway-vps_llmnet`, avec `local-private` comme modèle par défaut.
+
+Prérequis : la stack LiteLLM doit déjà tourner avec le profil `local-llm`.
+
+```bash
+cd ../litellm-gateway-vps/litellm-gateway-vps
+bash scripts/dev_up.sh
+cd ../../market_insights
+docker compose up --build
+```
+
+Raccourci recommandé depuis `market_insights`:
+
+```bash
+bash scripts/dev_up_litellm.sh
+```
+
+Le script vérifie que le gateway LiteLLM est prêt avant de lancer le compose du projet.
+
+Mode détaché avec healthchecks post-start:
+
+```bash
+DETACH=true bash scripts/dev_up_litellm.sh
+```
+
+Mode détaché avec test e2e `/llm/chat` en plus:
+
+```bash
+DETACH=true RUN_E2E_CHAT_TEST=true bash scripts/dev_up_litellm.sh
+```
+
+**Ollama en infra uniquement** — le profil `standalone-ollama` reste disponible pour les besoins d'infrastructure ou de debug, mais l'application n'expose plus `ollama` comme provider sélectionnable. Le chemin normal passe par LiteLLM.
+
+```bash
+docker compose --profile standalone-ollama up --build
+```
 
 Parametres de demarrage robustes (via variables d'environnement):
 
@@ -19,8 +54,8 @@ Parametres de demarrage robustes (via variables d'environnement):
 - `MI_WAIT_DNS` : active un precheck DNS au demarrage (`true` recommande)
 - `MI_API_RELOAD` : mode reload Uvicorn (dev uniquement)
 - `MI_API_WORKERS` : nombre de workers Uvicorn (prod)
-- `LLM_BACKEND` : provider LLM (`ollama` par défaut désormais)
-- `LLM_MODEL` : modèle (`tinyllama` par défaut, 1.1B très léger)
+- `LLM_BACKEND` : provider LLM (`litellm` par défaut)
+- `LLM_MODEL` : modèle (`local-private` par défaut via LiteLLM)
 
 En production, lancer de preference sans seed automatique:
 
@@ -28,13 +63,15 @@ En production, lancer de preference sans seed automatique:
 MI_RUN_SEED=false docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Changeer le modèle Ollama (ex: phi pour meilleure qualité mais un peu plus lourd):
+Changer le modèle LiteLLM par défaut:
 
 ```bash
-LLM_MODEL=phi docker compose up --build
+LLM_MODEL=cheap-chat docker compose up --build
 ```
 
-Le modèle se téléchargera à la première run, puis sera réutilisé.
+Le profil `standalone-ollama` reste réservé aux usages d'infrastructure et de debug.
+
+Note importante sur Docker Compose : une variable exportée dans le shell a priorité sur `.env`. Si tu as déjà exporté `LITELLM_BASE_URL` ou `LITELLM_API_KEY` dans ton terminal, elle peut surcharger la configuration attendue du projet.
 
 ### Sans Docker
 
@@ -59,15 +96,16 @@ gap up/down, pullback SMA, breakout/breakdown, avalement, marteau, étoile filan
 
 ## RAG Chat + LLM
 
-`POST /llm/chat` avec choix du provider. Démarrage rapide avec Ollama :
+`POST /llm/chat` utilise LiteLLM par défaut. Démarrage rapide avec LiteLLM :
 
 ```bash
-ollama pull llama3 && ollama serve
-# .env : LLM_BACKEND=ollama
+cd ../litellm-gateway-vps/litellm-gateway-vps
+bash scripts/dev_up.sh
+# .env : LLM_BACKEND=litellm
 ```
 
-7 providers : OpenAI, Anthropic, Mistral, Groq, Ollama, LMStudio, Fallback.
-`GET /llm/providers` liste la disponibilité en temps réel.
+7 providers exposés : LiteLLM, OpenAI, Anthropic, Mistral, Groq, LMStudio, Fallback.
+`GET /llm/providers` liste uniquement les providers sélectionnables dans l'application.
 
 ## Tests
 
@@ -80,7 +118,9 @@ Voir **ARCHITECTURE.md** pour les schémas et le détail technique.
 
 L'endpoint `GET /llm/providers` interroge chaque provider en temps réel et retourne son statut de disponibilité ainsi que la liste de ses modèles. Le frontend utilise cette information pour afficher un indicateur vert (en ligne) ou gris (hors ligne) à côté de chaque provider dans le sélecteur.
 
-### Les 7 providers
+### Les 7 providers exposés
+
+**LiteLLM** — Nécessite une URL OpenAI-compatible (`LITELLM_BASE_URL`) et une clé (`LITELLM_API_KEY`). Dans cette configuration, Market Insights appelle ton gateway partagé sur `http://litellm:4000` et récupère dynamiquement les modèles exposés, dont `local-private`.
 
 **OpenAI** — Nécessite une clé API (`OPENAI_API_KEY`). Modèles disponibles : gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo. Le provider utilise la librairie officielle `openai`. La clé est vérifiée au démarrage : si elle est absente, le provider est marqué comme indisponible.
 
@@ -90,15 +130,13 @@ L'endpoint `GET /llm/providers` interroge chaque provider en temps réel et reto
 
 **Groq** — Nécessite une clé API (`GROQ_API_KEY`). Modèles disponibles : llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768, gemma2-9b-it. Groq fournit un free tier généreux. L'API est compatible OpenAI, les appels passent par httpx.
 
-**Ollama** — Aucune clé nécessaire. Ollama tourne en local sur le port 11434. Le provider vérifie la disponibilité en appelant `GET /api/tags` sur l'URL configurée. Si Ollama répond, il est marqué comme disponible et la liste des modèles installés est récupérée dynamiquement. Pour installer un modèle : `ollama pull llama3`. Pour démarrer le serveur : `ollama serve`.
-
 **LMStudio** — Aucune clé nécessaire. LMStudio tourne en local sur le port 1234 et expose une API compatible OpenAI. Le provider vérifie la disponibilité en appelant `GET /v1/models`. Tout modèle GGUF chargé dans LMStudio est automatiquement détecté.
 
 **Fallback** — Toujours disponible. Ne fait aucun appel LLM. Retourne le contexte RAG brut tel quel. C'est le mode par défaut quand aucun LLM n'est configuré. Utile pour la démo offline ou le debug.
 
 ### Changement de provider à la volée
 
-Dans l'onglet RAG Chat du dashboard, le panneau de droite liste tous les providers avec leur statut. Cliquer sur un provider le sélectionne pour les prochains messages. Le sélecteur de modèle en dessous s'adapte automatiquement à la liste des modèles du provider choisi. Aucun redémarrage n'est nécessaire.
+Dans l'onglet RAG Chat du dashboard, le panneau de droite liste les providers exposés avec leur statut. `litellm` est sélectionné par défaut. `ollama` n'est pas proposé car le modèle local est censé être consommé via le gateway LiteLLM. Le sélecteur de modèle en dessous s'adapte automatiquement à la liste des modèles du provider choisi. Aucun redémarrage n'est nécessaire.
 
 ### Exemple d'appel API
 
@@ -108,8 +146,8 @@ curl -X POST http://127.0.0.1:8000/llm/chat \
   -d '{
     "ticker": "AAPL",
     "question": "Quels sont les principaux risques pour Apple ?",
-    "llm_backend": "ollama",
-    "llm_model": "llama3",
+    "llm_backend": "litellm",
+    "llm_model": "local-private",
     "language": "fr",
     "top_k": 5
   }'
@@ -243,7 +281,7 @@ Le score de confiance est calibré entre 0.35 et 0.92 en fonction du trend, de l
 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
-| GET | `/llm/providers` | Liste des 7 providers avec disponibilité et modèles |
+| GET | `/llm/providers` | Liste des 7 providers exposés avec disponibilité et modèles |
 | POST | `/llm/chat` | Chat RAG : question + ticker + choix du provider/modèle |
 
 Le body de `/llm/chat` attend un JSON :
@@ -251,8 +289,8 @@ Le body de `/llm/chat` attend un JSON :
 {
   "question": "Quels catalyseurs pour la croissance ?",
   "ticker": "AAPL",
-  "llm_backend": "ollama",
-  "llm_model": "llama3",
+  "llm_backend": "litellm",
+  "llm_model": "local-private",
   "language": "fr",
   "top_k": 5
 }
@@ -300,8 +338,8 @@ Toutes les variables sont optionnelles. Le fichier `.env.example` fournit les va
 
 | Variable | Défaut | Description |
 |----------|--------|-------------|
-| `LLM_BACKEND` | `fallback` | Provider LLM par défaut utilisé pour la génération de rapports et le RAG chat. Valeurs : `openai`, `anthropic`, `mistral`, `groq`, `ollama`, `lmstudio`, `fallback`. Ce choix peut être surchargé dans chaque appel API via le paramètre `llm_backend`. |
-| `LLM_MODEL` | `` | Nom du modèle à utiliser. Si vide, chaque provider utilise son modèle par défaut (gpt-4o-mini pour OpenAI, claude-sonnet-4-20250514 pour Anthropic, llama3 pour Ollama, etc.). Permet de forcer un modèle spécifique, par exemple `gpt-4o` ou `mistral-large-latest`. |
+| `LLM_BACKEND` | `litellm` | Provider LLM par défaut utilisé pour la génération de rapports et le RAG chat. Valeurs exposées par l'application : `litellm`, `openai`, `anthropic`, `mistral`, `groq`, `lmstudio`, `fallback`. `ollama` n'est pas sélectionnable dans l'application et doit passer par LiteLLM si tu veux réutiliser le même modèle derrière un gateway. |
+| `LLM_MODEL` | `` | Nom du modèle à utiliser. Si vide, chaque provider utilise son modèle par défaut (`local-private` pour LiteLLM, `gpt-4o-mini` pour OpenAI, `claude-sonnet-4-20250514` pour Anthropic, etc.). Permet de forcer un modèle spécifique, par exemple `local-private` ou `mistral-large-latest`. |
 | `LLM_TEMPERATURE` | `0.3` | Température de génération (0.0 = déterministe, 1.0 = créatif). La valeur 0.3 est un bon compromis pour des analyses financières factuelles. |
 | `LLM_MAX_TOKENS` | `1500` | Nombre maximum de tokens dans la réponse générée. Augmenter pour des analyses plus longues, réduire pour économiser les tokens sur les APIs payantes. |
 

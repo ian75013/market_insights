@@ -2,7 +2,29 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Label, Tag } from "./ui";
 import { ragChatStream, getLlmProviders, indexRag, getRagStats } from "../services/api";
 
-const PROV_COLORS = { openai:"#10a37f", anthropic:"#d97706", mistral:"#f97316", groq:"#6366f1", ollama:"#22d3ee", lmstudio:"#a78bfa", fallback:"var(--muted)" };
+const PROV_COLORS = { litellm:"#111827", openai:"#10a37f", anthropic:"#d97706", mistral:"#f97316", groq:"#6366f1", lmstudio:"#a78bfa", fallback:"var(--muted)" };
+
+function visibleProviders(providers) {
+  return providers.filter(provider => provider.name !== "ollama");
+}
+
+function preferredModel(provider) {
+  if (!provider?.models?.length) return "";
+  if (provider.name === "litellm") {
+    return provider.models.find(model => model === "local-private") || provider.models[0];
+  }
+  return provider.models[0];
+}
+
+function preferredProvider(providers) {
+  const available = providers.filter(provider => provider.available);
+  return (
+    available.find(provider => provider.name === "litellm") ||
+    available.find(provider => provider.name !== "fallback") ||
+    available.find(provider => provider.name === "fallback") ||
+    null
+  );
+}
 
 export function RagChatTab({ ticker }) {
   const [providers, setProviders] = useState([]);
@@ -20,9 +42,10 @@ export function RagChatTab({ ticker }) {
 
   useEffect(() => {
     getLlmProviders().then(d => {
-      setProviders(d.providers || []);
-      const first = (d.providers || []).find(p => p.available && p.name !== "fallback");
-      if (first) { setBackend(first.name); if (first.models?.length) setModel(first.models[0]); }
+      const nextProviders = visibleProviders(d.providers || []);
+      setProviders(nextProviders);
+      const first = preferredProvider(nextProviders);
+      if (first) { setBackend(first.name); setModel(preferredModel(first)); }
       else setBackend("fallback");
     }).catch(() => { setProviders([{ name:"fallback", available:true, models:[] }]); setBackend("fallback"); });
     getRagStats().then(setRagStats).catch(()=>{});
@@ -32,7 +55,7 @@ export function RagChatTab({ ticker }) {
 
   const curProv = providers.find(p => p.name === backend);
   const models = curProv?.models || [];
-  const pickBackend = (name) => { setBackend(name); const p = providers.find(x=>x.name===name); if (p?.models?.length) setModel(p.models[0]); else setModel(""); };
+  const pickBackend = (name) => { setBackend(name); const p = providers.find(x=>x.name===name); if (p?.models?.length) setModel(preferredModel(p)); else setModel(""); };
 
   const send = useCallback(async () => {
     const q = input.trim(); if (!q || loading) return;
@@ -168,8 +191,9 @@ export function RagChatTab({ ticker }) {
         </Card>
         <Card delay={240}><Label>Guide</Label>
           <div className="text-sm muted lh-relaxed">
+            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>LiteLLM:</strong> provider par défaut, gateway partagé vers le modèle local</p>
             <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Cloud:</strong> Clés API dans .env</p>
-            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Local:</strong> ollama serve ou LMStudio</p>
+            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Local:</strong> utilise le modèle via LiteLLM gateway ou LMStudio</p>
             <p><strong style={{ color:"var(--text)" }}>Fallback:</strong> Contexte RAG brut</p>
           </div>
         </Card>

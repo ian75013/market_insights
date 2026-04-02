@@ -101,6 +101,7 @@
 .dmypy.json
 .eggs/
 .env
+.env.ovh
 .hypothesis/
 .idea/
 .installed.cfg
