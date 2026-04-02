@@ -60,7 +60,7 @@ services:
       - 8.8.8.8
       - 8.8.4.4
     ports:
-      - "127.0.0.1:18000:8000"
+      - "127.0.0.1:${API_BIND_PORT:-18000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
       interval: 30s
@@ -82,7 +82,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:18080:80"
+      - "127.0.0.1:${FRONTEND_BIND_PORT:-18080}:80"
     networks:
       - mi-net
 

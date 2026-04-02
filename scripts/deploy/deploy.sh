@@ -62,6 +62,18 @@ remote_sync_workspace_overlay() {
     -C "$ROOT_DIR" . | ssh -p "$ssh_port" "$ssh_target" "mkdir -p $(printf %q "$app_dir") && tar -xzf - -C $(printf %q "$app_dir")"
 }
 
+remote_sync_dotenv() {
+  local ssh_target="$1"
+  local ssh_port="$2"
+  local app_dir="$3"
+  local local_env="$ROOT_DIR/.env"
+
+  [ -f "$local_env" ] || die "Missing local .env at $local_env"
+
+  scp -P "$ssh_port" "$local_env" "$ssh_target:$app_dir/.env" >/dev/null
+  ssh -p "$ssh_port" "$ssh_target" "chmod 600 $(printf %q "$app_dir/.env")"
+}
+
 remote_bootstrap_repo() {
   local ssh_target="$1"
   local ssh_port="$2"
@@ -153,8 +165,8 @@ if [ ! -f "${compose_file}" ]; then
   exit 1
 fi
 
-run_sudo env IMAGE_TAG="${IMAGE_TAG}" docker compose -f "${compose_file}" up -d --build --remove-orphans
-run_sudo env IMAGE_TAG="${IMAGE_TAG}" docker compose -f "${compose_file}" ps
+run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose -f "${compose_file}" up -d --build --remove-orphans
+run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose -f "${compose_file}" ps
 EOF
 
   chmod +x "$tmp_local_script"
@@ -170,7 +182,9 @@ run_remote_apache_config() {
   local app_domain="$4"
   local ssl_cert="$5"
   local ssl_key="$6"
-  local sudo_mode="$7"
+  local api_bind_port="$7"
+  local frontend_bind_port="$8"
+  local sudo_mode="$9"
   local sudo_password="${SUDO_PASSWORD:-}"
   local ssh_tty_args=()
   local tmp_local_script
@@ -207,6 +221,8 @@ sed \
   -e "s|__APP_DOMAIN__|${app_domain}|g" \
   -e "s|__SSL_CERT__|${ssl_cert}|g" \
   -e "s|__SSL_KEY__|${ssl_key}|g" \
+  -e "s|__API_BIND_PORT__|${api_bind_port}|g" \
+  -e "s|__FRONTEND_BIND_PORT__|${frontend_bind_port}|g" \
   "\$template" > "\$tmp_conf"
 
 run_sudo install -m 644 "\$tmp_conf" /etc/apache2/sites-available/market-insight.conf
@@ -214,6 +230,56 @@ run_sudo a2enmod proxy proxy_http headers ssl rewrite >/dev/null
 run_sudo a2ensite market-insight.conf >/dev/null
 run_sudo apache2ctl configtest
 run_sudo systemctl reload apache2
+EOF
+
+  chmod +x "$tmp_local_script"
+  scp -P "$ssh_port" "$tmp_local_script" "${ssh_target}:${tmp_remote_script}" >/dev/null
+  ssh "${ssh_tty_args[@]}" -p "$ssh_port" "$ssh_target" "SUDO_PASSWORD=$(printf %q "$sudo_password") bash ${tmp_remote_script}"
+  rm -f "$tmp_local_script"
+}
+
+run_remote_certbot() {
+  local ssh_target="$1"
+  local ssh_port="$2"
+  local app_domain="$3"
+  local certbot_email="$4"
+  local sudo_mode="$5"
+  local sudo_password="${SUDO_PASSWORD:-}"
+  local ssh_tty_args=()
+  local tmp_local_script
+  local tmp_remote_script
+
+  if [ "$sudo_mode" = "prompt" ]; then
+    ssh_tty_args=(-tt)
+  fi
+
+  tmp_local_script="$(mktemp)"
+  tmp_remote_script="/tmp/${APP_NAME}-certbot.sh"
+
+  cat > "$tmp_local_script" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+$(write_remote_sudo_helpers "$sudo_mode")
+
+if ! command -v certbot >/dev/null 2>&1; then
+  run_sudo apt-get update
+  run_sudo apt-get install -y certbot python3-certbot-apache
+fi
+
+# Prevent apache plugin failures if an old vhost references missing cert files.
+if [ -f /etc/apache2/sites-enabled/market-insight.conf ]; then
+  run_sudo a2dissite market-insight.conf >/dev/null || true
+  run_sudo systemctl reload apache2 || true
+fi
+
+run_sudo certbot certonly --apache \
+  --non-interactive \
+  --agree-tos \
+  --keep-until-expiring \
+  --cert-name "${app_domain}" \
+  --email "${certbot_email}" \
+  -d "${app_domain}"
 EOF
 
   chmod +x "$tmp_local_script"
@@ -234,10 +300,15 @@ deploy_ovh_apache() {
   local git_branch="${GIT_BRANCH:-main}"
   local compose_file="${COMPOSE_FILE:-docker-compose.ovh-apache.yml}"
   local sync_overlay="${SYNC_LOCAL_OVERLAY:-true}"
+  local sync_dotenv="${SYNC_DOTENV:-true}"
   local enable_apache="${ENABLE_APACHE_CONFIG:-true}"
+  local certbot_autoconfig="${CERTBOT_AUTOCONFIG:-false}"
+  local certbot_email="${CERTBOT_EMAIL:-}"
   local app_domain="${APP_DOMAIN:-}"
   local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem}"
   local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem}"
+  local api_bind_port="${API_BIND_PORT:-18000}"
+  local frontend_bind_port="${FRONTEND_BIND_PORT:-18080}"
   local sudo_mode
 
   [ -n "$ssh_user" ] || die "SSH_USER is required"
@@ -255,13 +326,27 @@ deploy_ovh_apache() {
     remote_sync_workspace_overlay "$ssh_target" "$ssh_port" "$app_dir"
   fi
 
+  if [ "$sync_dotenv" = "true" ]; then
+    log "Syncing local .env to VPS with secure permissions"
+    remote_sync_dotenv "$ssh_target" "$ssh_port" "$app_dir"
+  fi
+
   log "Starting Docker stack on VPS"
   run_remote_ovh_deploy "$ssh_target" "$ssh_port" "$app_dir" "$compose_file" "$sudo_mode"
 
   if [ "$enable_apache" = "true" ]; then
     [ -n "$app_domain" ] || die "APP_DOMAIN is required when ENABLE_APACHE_CONFIG=true"
+
+    if [ "$certbot_autoconfig" = "true" ]; then
+      [ -n "$certbot_email" ] || die "CERTBOT_EMAIL is required when CERTBOT_AUTOCONFIG=true"
+      log "Issuing/renewing TLS certificate with Certbot"
+      run_remote_certbot "$ssh_target" "$ssh_port" "$app_domain" "$certbot_email" "$sudo_mode"
+      ssl_cert="/etc/letsencrypt/live/${app_domain}/fullchain.pem"
+      ssl_key="/etc/letsencrypt/live/${app_domain}/privkey.pem"
+    fi
+
     log "Applying Apache reverse proxy config on VPS"
-    run_remote_apache_config "$ssh_target" "$ssh_port" "$app_dir" "$app_domain" "$ssl_cert" "$ssl_key" "$sudo_mode"
+    run_remote_apache_config "$ssh_target" "$ssh_port" "$app_dir" "$app_domain" "$ssl_cert" "$ssl_key" "$api_bind_port" "$frontend_bind_port" "$sudo_mode"
   fi
 
   log "OVH Apache deployment completed"
@@ -278,6 +363,8 @@ deploy_ovh_proxy_only() {
   local app_domain="${APP_DOMAIN:-}"
   local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem}"
   local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem}"
+  local api_bind_port="${API_BIND_PORT:-18000}"
+  local frontend_bind_port="${FRONTEND_BIND_PORT:-18080}"
   local sudo_mode
 
   [ -n "$ssh_user" ] || die "SSH_USER is required"
@@ -285,7 +372,7 @@ deploy_ovh_proxy_only() {
   [ -n "$app_domain" ] || die "APP_DOMAIN is required"
 
   sudo_mode="$(remote_sudo_mode)"
-  run_remote_apache_config "${ssh_user}@${ssh_host}" "$ssh_port" "$app_dir" "$app_domain" "$ssl_cert" "$ssl_key" "$sudo_mode"
+  run_remote_apache_config "${ssh_user}@${ssh_host}" "$ssh_port" "$app_dir" "$app_domain" "$ssl_cert" "$ssl_key" "$api_bind_port" "$frontend_bind_port" "$sudo_mode"
 
   log "OVH Apache proxy configuration applied"
 }
@@ -319,8 +406,12 @@ Important env vars:
   GIT_REPO, GIT_BRANCH=main, APP_DIR=/opt/market_insights
   COMPOSE_FILE=docker-compose.ovh-apache.yml
   APP_DOMAIN, SSL_CERT, SSL_KEY
+  API_BIND_PORT=18000, FRONTEND_BIND_PORT=18080
   SYNC_LOCAL_OVERLAY=true|false
+  SYNC_DOTENV=true|false
   ENABLE_APACHE_CONFIG=true|false
+  CERTBOT_AUTOCONFIG=true|false
+  CERTBOT_EMAIL=you@example.com
 
 Security:
   Prefer ASK_SUDO_PASSWORD=true over SUDO_PASSWORD in env files.

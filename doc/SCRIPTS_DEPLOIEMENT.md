@@ -36,8 +36,12 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
    - SSH_HOST
    - GIT_REPO
    - APP_DOMAIN
-   - SSL_CERT
-   - SSL_KEY
+  - CERTBOT_EMAIL (si CERTBOT_AUTOCONFIG=true)
+
+  Notes:
+  - `SYNC_DOTENV=true` copie automatiquement le `.env` local vers le VPS avec permissions 600.
+  - `CERTBOT_AUTOCONFIG=true` genere/renouvelle le certificat LetsEncrypt avant application du vhost Apache.
+  - Si `CERTBOT_AUTOCONFIG=false`, renseigner `SSL_CERT` et `SSL_KEY` manuellement.
 
 3. Lancer le deploiement complet:
    bash scripts/deploy/deploy.ovh.sh deploy .env.ovh
@@ -80,6 +84,17 @@ Mode proxy:
 - ENABLE_APACHE_CONFIG
   true: applique aussi la config Apache
   false: ne touche pas Apache
+
+- CERTBOT_AUTOCONFIG
+  true: lance certbot automatiquement sur le VPS
+  false: n execute pas certbot
+
+- CERTBOT_EMAIL
+  email requis par certbot quand CERTBOT_AUTOCONFIG=true
+
+- SYNC_DOTENV
+  true: copie .env local vers APP_DIR/.env (chmod 600)
+  false: ne copie pas .env
 
 - SYNC_LOCAL_OVERLAY
   true: copie les modifications locales non poussees sur le VPS
