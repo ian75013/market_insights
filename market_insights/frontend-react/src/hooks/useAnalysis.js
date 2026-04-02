@@ -31,7 +31,7 @@ export function useAnalysis(ticker) {
 
   useEffect(() => { load(); loadMacro(); }, [load, loadMacro]);
 
-  const runPipeline = useCallback(async (provider = "sample") => {
+  const runPipeline = useCallback(async (provider = "yahoo") => {
     setLoading(true);
     setError(null);
     try {

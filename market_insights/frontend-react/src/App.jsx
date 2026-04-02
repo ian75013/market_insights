@@ -11,7 +11,14 @@ import { useAnalysis } from "./hooks/useAnalysis";
 
 const TICKERS = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "JNJ", "BTC"];
 const TABS = ["overview", "chandeliers", "technique", "fondamentaux", "news", "rag chat"];
-const PROVIDERS = ["sample", "yahoo", "coingecko", "stooq", "alpha_vantage", "auto"];
+const PROVIDERS = [
+  { value: "yahoo", label: "Yahoo Finance (Auto actions)" },
+  { value: "coingecko", label: "CoinGecko (Auto crypto)" },
+  { value: "sample", label: "Sample (disabled)", disabled: true },
+  { value: "stooq", label: "Stooq (disabled)", disabled: true },
+  { value: "alpha_vantage", label: "Alpha Vantage (disabled)", disabled: true },
+  { value: "auto", label: "Auto (disabled)", disabled: true },
+];
 
 const CRYPTO_SET = new Set(["BTC","ETH","SOL","ADA","DOGE","DOT","AVAX","MATIC","LINK","UNI","XRP","BNB","ATOM","LTC","NEAR"]);
 const fmtHeaderPrice = (v) => v >= 1000
@@ -21,7 +28,6 @@ const fmtHeaderPrice = (v) => v >= 1000
 export default function App() {
   const [ticker, setTicker] = useState("AAPL");
   const [tab, setTab] = useState("overview");
-  const [provider, setProvider] = useState("sample");
   const [theme, setTheme] = useState(() => localStorage.getItem("mi-theme") || "light");
   const { data, macro, loading, error, reload, runPipeline } = useAnalysis(ticker);
 
@@ -38,8 +44,9 @@ export default function App() {
   const upside = h?.hybrid?.upside_pct || fv?.upside_pct || 0;
   const verdict = h?.verdict || "neutral";
   const tickerName = data?.fundamentals?.name || data?.insight?.fundamentals?.name || ticker;
+  const effectiveProvider = CRYPTO_SET.has(ticker) ? "coingecko" : "yahoo";
 
-  const handleEtl = useCallback(() => runPipeline(provider), [runPipeline, provider]);
+  const handleEtl = useCallback(() => runPipeline(effectiveProvider), [runPipeline, effectiveProvider]);
 
   return (
     <div className="app-shell">
@@ -75,8 +82,12 @@ export default function App() {
 
       {/* Controls */}
       <div className="controls">
-        <select className="select" value={provider} onChange={e => setProvider(e.target.value)}>
-          {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+        <select className="select" value={effectiveProvider} disabled>
+          {PROVIDERS.map(p => (
+            <option key={p.value} value={p.value} disabled={p.disabled || (effectiveProvider === "yahoo" ? p.value !== "yahoo" : p.value !== "coingecko")}>
+              {p.label}
+            </option>
+          ))}
         </select>
         <button className="btn btn-primary" onClick={handleEtl} disabled={loading}>
           {loading ? "Chargement…" : "Lancer ETL + Recharger"}

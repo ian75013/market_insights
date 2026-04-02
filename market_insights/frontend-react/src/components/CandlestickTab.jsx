@@ -11,7 +11,9 @@ const POPULAR = [
 ];
 const PROVIDERS = [
   { value: "yahoo", label: "Yahoo Finance" }, { value: "coingecko", label: "CoinGecko (Crypto)" },
-  { value: "sample", label: "Sample" }, { value: "stooq", label: "Stooq" }, { value: "auto", label: "Auto" },
+  { value: "sample", label: "Sample (disabled)", disabled: true },
+  { value: "stooq", label: "Stooq (disabled)", disabled: true },
+  { value: "auto", label: "Auto (disabled)", disabled: true },
 ];
 const CRYPTO_TICKERS = new Set(["BTC","ETH","SOL","ADA","DOGE","DOT","AVAX","MATIC","LINK","UNI","XRP","BNB","ATOM","LTC","NEAR"]);
 
@@ -72,7 +74,6 @@ function CandleTooltip({ active, payload }) {
 
 export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
   const [customTicker, setCustomTicker] = useState("");
-  const [provider, setProvider] = useState("yahoo");
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -88,12 +89,13 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
 
   // Detect crypto from ticker (strip -USD suffix)
   const isCryptoTicker = (t) => CRYPTO_TICKERS.has(t.replace(/-.*/, "").toUpperCase());
+  const draftTicker = (customTicker || parentTicker || "").trim().toUpperCase();
+  const autoProvider = isCryptoTicker(draftTicker) ? "coingecko" : "yahoo";
 
-  const loadChart = useCallback(async (ticker, prov) => {
+  const loadChart = useCallback(async (ticker) => {
     if (!ticker) return;
     const t = ticker.trim().toUpperCase();
-    // Auto-route crypto to coingecko — backend does it too, but this avoids confusion
-    const effectiveProv = (isCryptoTicker(t) && prov !== "sample") ? "coingecko" : prov;
+    const effectiveProv = isCryptoTicker(t) ? "coingecko" : "yahoo";
     setLoading(true); setError(null); setActiveTicker(t); setEtlInfo(null);
     try {
       const etlRes = await runEtl(t, effectiveProv);
@@ -107,8 +109,8 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
     finally { setLoading(false); }
   }, []);
 
-  const handleSubmit = (e) => { e?.preventDefault(); loadChart(customTicker || parentTicker, provider); };
-  const handleQuick = (t) => { setCustomTicker(t); loadChart(t, provider); };
+  const handleSubmit = (e) => { e?.preventDefault(); loadChart(customTicker || parentTicker); };
+  const handleQuick = (t) => { setCustomTicker(t); loadChart(t); };
 
   const prepared = useMemo(() => bars.map(b => ({ ...b, range: [b.low, b.high] })), [bars]);
   const [yMin, yMax] = useMemo(() => {
@@ -136,8 +138,12 @@ export function CandlestickTab({ data: parentData, ticker: parentTicker }) {
         <form onSubmit={handleSubmit} className="flex-row">
           <Label>Charger un graphique</Label>
           <input className="input input-mono flex-1" value={customTicker} onChange={e=>setCustomTicker(e.target.value.toUpperCase())} placeholder="Ticker (AAPL, TSLA, BTC-USD...)" style={{ minWidth: 140 }} />
-          <select className="select" value={provider} onChange={e=>setProvider(e.target.value)}>
-            {PROVIDERS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
+          <select className="select" value={autoProvider} disabled>
+            {PROVIDERS.map(p => (
+              <option key={p.value} value={p.value} disabled={p.disabled || (autoProvider === "yahoo" ? p.value !== "yahoo" : p.value !== "coingecko")}>
+                {p.label}
+              </option>
+            ))}
           </select>
           <button type="submit" className="btn btn-primary" disabled={loading}>{loading?"Chargement…":"Charger"}</button>
         </form>
