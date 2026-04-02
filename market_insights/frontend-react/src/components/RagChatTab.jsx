@@ -3,6 +3,7 @@ import { Card, Label, Tag } from "./ui";
 import { ragChatStream, getLlmProviders, indexRag, getRagStats } from "../services/api";
 
 const PROV_COLORS = { litellm:"#111827", openai:"#10a37f", anthropic:"#d97706", mistral:"#f97316", groq:"#6366f1", lmstudio:"#a78bfa", fallback:"var(--muted)" };
+const FORCED_LITELLM_MODEL = "llama3.2:1b";
 
 function visibleProviders(providers) {
   return providers.filter(provider => provider.name !== "ollama");
@@ -11,7 +12,7 @@ function visibleProviders(providers) {
 function preferredModel(provider) {
   if (!provider?.models?.length) return "";
   if (provider.name === "litellm") {
-    return provider.models.find(model => model === "local-private") || provider.models[0];
+    return FORCED_LITELLM_MODEL;
   }
   return provider.models[0];
 }
@@ -55,7 +56,21 @@ export function RagChatTab({ ticker }) {
 
   const curProv = providers.find(p => p.name === backend);
   const models = curProv?.models || [];
-  const pickBackend = (name) => { setBackend(name); const p = providers.find(x=>x.name===name); if (p?.models?.length) setModel(preferredModel(p)); else setModel(""); };
+  const modelOptions = (backend === "litellm" && models.length > 0)
+    ? models.map(m => ({ value: m, disabled: m !== FORCED_LITELLM_MODEL }))
+    : models.map(m => ({ value: m, disabled: false }));
+  const pickBackend = (name) => {
+    setBackend(name);
+    const p = providers.find(x => x.name === name);
+    if (p?.models?.length) setModel(preferredModel(p));
+    else setModel("");
+  };
+
+  useEffect(() => {
+    if (backend === "litellm" && model !== FORCED_LITELLM_MODEL) {
+      setModel(FORCED_LITELLM_MODEL);
+    }
+  }, [backend, model]);
 
   const send = useCallback(async () => {
     const q = input.trim(); if (!q || loading) return;
@@ -176,8 +191,20 @@ export function RagChatTab({ ticker }) {
         </Card>
         {models.length > 0 && (
           <Card delay={120}><Label>Modèle</Label>
-            <select className="select input-mono" value={model} onChange={e=>setModel(e.target.value)} style={{ width:"100%", marginTop:6 }}>
-              {models.map(m => <option key={m} value={m}>{m}</option>)}
+            <select
+              className="select input-mono"
+              value={backend === "litellm" ? FORCED_LITELLM_MODEL : model}
+              onChange={e => {
+                if (backend !== "litellm") setModel(e.target.value);
+              }}
+              style={{ width:"100%", marginTop:6 }}
+            >
+              {backend === "litellm" && !models.includes(FORCED_LITELLM_MODEL) && (
+                <option value={FORCED_LITELLM_MODEL}>{FORCED_LITELLM_MODEL} (forced)</option>
+              )}
+              {modelOptions.map(m => (
+                <option key={m.value} value={m.value} disabled={m.disabled}>{m.value}</option>
+              ))}
             </select>
           </Card>
         )}
