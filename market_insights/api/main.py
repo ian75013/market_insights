@@ -8,6 +8,9 @@ New in v4:
 - /rag/stats               : vector store stats
 """
 
+import logging
+
+from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -25,7 +28,13 @@ from market_insights.services.hybrid_insight_service import HybridInsightService
 from market_insights.services.market_service import MarketInsightService
 from market_insights.llm.providers import is_public_provider, list_providers, public_provider_names
 
-init_db()
+logger = logging.getLogger("mi.scheduler")
+
+@asynccontextmanager
+async def lifespan(app_: FastAPI):
+    init_db()
+    yield
+
 
 app = FastAPI(
     title="Market Insights API",
@@ -35,6 +44,7 @@ app = FastAPI(
         "analyse technique, RAG vectoriel, LLM multi-provider, "
         "chandeliers annotés."
     ),
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
