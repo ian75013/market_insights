@@ -219,7 +219,6 @@ export function RagChatTab({ ticker }) {
         <Card delay={240}><Label>Guide</Label>
           <div className="text-sm muted lh-relaxed">
             <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>LiteLLM:</strong> provider par défaut, gateway partagé vers le modèle local</p>
-            <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Cloud:</strong> Clés API dans .env</p>
             <p style={{ marginBottom:6 }}><strong style={{ color:"var(--text)" }}>Local:</strong> utilise le modèle via LiteLLM gateway ou LMStudio</p>
             <p><strong style={{ color:"var(--text)" }}>Fallback:</strong> Contexte RAG brut</p>
           </div>

@@ -89,10 +89,10 @@ export default function App() {
             </option>
           ))}
         </select>
-        <button className="btn btn-primary" onClick={handleEtl} disabled={loading}>
-          {loading ? "Chargement…" : "Lancer ETL + Recharger"}
+        <button className="btn btn-primary" onClick={handleEtl} disabled title="ETL automatique chaque matin — mise à jour manuelle désactivée" style={{ opacity: 0.45, cursor: "not-allowed" }}>
+          Lancer ETL + Recharger
         </button>
-        <button className="btn btn-secondary" onClick={reload} disabled={loading}>Recharger</button>
+        <button className="btn btn-secondary" onClick={reload} disabled title="Rechargement automatique — bouton désactivé" style={{ opacity: 0.45, cursor: "not-allowed" }}>Recharger</button>
         {error && <span className="error-msg">⚠ {error}</span>}
         {loading && <span className="loading-pulse">Chargement…</span>}
       </div>
