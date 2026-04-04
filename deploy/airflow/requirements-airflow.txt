@@ -1,0 +1,18 @@
+# Python packages installed *inside* the Airflow containers so the DAGs
+# can import market_insights and its data connectors.
+#
+# The market_insights package itself is added via the DAG's sys.path
+# manipulation (see market_insights_dag.py) so only its runtime dependencies
+# are listed here.
+
+yfinance>=0.2.40
+httpx>=0.27
+sqlalchemy==2.0.43
+pydantic==2.12.5
+pydantic-settings==2.13.1
+psycopg2-binary>=2.9
+pandas>=2.0
+numpy>=1.26
+python-dotenv>=1.0
+sentence-transformers>=3.0.0
+scikit-learn>=1.3
