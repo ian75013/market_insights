@@ -38,6 +38,13 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
    - APP_DOMAIN
   - CERTBOT_EMAIL (si CERTBOT_AUTOCONFIG=true)
 
+  Pour activer Airflow en prod:
+  - COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml
+  - AIRFLOW_FERNET_KEY
+  - AIRFLOW_SECRET_KEY
+  - AIRFLOW_ADMIN_PASSWORD
+  - AIRFLOW_WEBSERVER_BIND (mettre l'IP VPN pour acces VPN-only)
+
   Notes:
   - `SYNC_DOTENV=true` copie automatiquement le `.env` local vers le VPS avec permissions 600.
   - `CERTBOT_AUTOCONFIG=true` genere/renouvelle le certificat LetsEncrypt avant application du vhost Apache.
@@ -75,8 +82,18 @@ Mode proxy:
   Fichier compose a lancer sur VPS
   Defaut recommande: docker-compose.ovh-apache.yml
 
+- COMPOSE_FILES
+  Liste de fichiers compose separes par des virgules (sans espaces).
+  Prioritaire sur COMPOSE_FILE quand renseigne.
+  Exemple:
+  docker-compose.ovh-apache.yml,docker-compose.airflow.yml
+
 - APP_DOMAIN
   Domaine public frontend/API (avec routage /api)
+
+- AIRFLOW_WEBSERVER_BIND
+  IP de bind du webserver Airflow. Pour exposition VPN uniquement,
+  utiliser l'IP VPN du serveur (ex: 10.8.0.2) plutot que 0.0.0.0.
 
 - SSL_CERT, SSL_KEY
   Chemins certificats pour Apache

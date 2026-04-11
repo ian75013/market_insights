@@ -129,7 +129,8 @@ run_remote_ovh_deploy() {
   local ssh_port="$2"
   local app_dir="$3"
   local compose_file="$4"
-  local sudo_mode="$5"
+  local compose_files="$5"
+  local sudo_mode="$6"
   local sudo_password="${SUDO_PASSWORD:-}"
   local ssh_tty_args=()
   local tmp_local_script
@@ -160,13 +161,29 @@ if ! run_sudo docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "${compose_file}" ]; then
-  echo "Missing compose file: ${compose_file}" >&2
+compose_files_str="${compose_files}"
+if [ -z "${compose_files_str}" ]; then
+  compose_files_str="${compose_file}"
+fi
+
+IFS=',' read -r -a compose_files_arr <<< "${compose_files_str}"
+compose_args=()
+for f in "${compose_files_arr[@]}"; do
+  [ -n "$f" ] || continue
+  if [ ! -f "$f" ]; then
+    echo "Missing compose file: $f" >&2
+    exit 1
+  fi
+  compose_args+=( -f "$f" )
+done
+
+if [ "${#compose_args[@]}" -eq 0 ]; then
+  echo "No compose files resolved. Set COMPOSE_FILE or COMPOSE_FILES." >&2
   exit 1
 fi
 
-run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose -f "${compose_file}" up -d --build --remove-orphans
-run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose -f "${compose_file}" ps
+run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose "${compose_args[@]}" up -d --build --remove-orphans
+run_sudo env IMAGE_TAG="${IMAGE_TAG}" API_BIND_PORT="${API_BIND_PORT:-18000}" FRONTEND_BIND_PORT="${FRONTEND_BIND_PORT:-18080}" docker compose "${compose_args[@]}" ps
 EOF
 
   chmod +x "$tmp_local_script"
@@ -299,6 +316,7 @@ deploy_ovh_apache() {
   local git_repo="${GIT_REPO:-}"
   local git_branch="${GIT_BRANCH:-main}"
   local compose_file="${COMPOSE_FILE:-docker-compose.ovh-apache.yml}"
+  local compose_files="${COMPOSE_FILES:-}"
   local sync_overlay="${SYNC_LOCAL_OVERLAY:-true}"
   local sync_dotenv="${SYNC_DOTENV:-true}"
   local enable_apache="${ENABLE_APACHE_CONFIG:-true}"
@@ -332,7 +350,7 @@ deploy_ovh_apache() {
   fi
 
   log "Starting Docker stack on VPS"
-  run_remote_ovh_deploy "$ssh_target" "$ssh_port" "$app_dir" "$compose_file" "$sudo_mode"
+  run_remote_ovh_deploy "$ssh_target" "$ssh_port" "$app_dir" "$compose_file" "$compose_files" "$sudo_mode"
 
   if [ "$enable_apache" = "true" ]; then
     [ -n "$app_domain" ] || die "APP_DOMAIN is required when ENABLE_APACHE_CONFIG=true"
@@ -405,6 +423,7 @@ Important env vars:
   SSH_USER, SSH_HOST, SSH_PORT=22
   GIT_REPO, GIT_BRANCH=main, APP_DIR=/opt/market_insights
   COMPOSE_FILE=docker-compose.ovh-apache.yml
+  COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml
   APP_DOMAIN, SSL_CERT, SSL_KEY
   API_BIND_PORT=18000, FRONTEND_BIND_PORT=18080
   SYNC_LOCAL_OVERLAY=true|false
