@@ -11,7 +11,7 @@ Ce guide couvre le deploiement de `market_insights` sur VPS OVH avec Apache2 sur
 
 Option Airflow (nouveau):
 
-- Airflow webserver: `127.0.0.1:8080` (ou IP VPN via `AIRFLOW_WEBSERVER_BIND`)
+- Airflow webserver: `127.0.0.1:18089` (ou IP VPN via `AIRFLOW_WEBSERVER_BIND`)
 - Airflow scheduler + metadata DB: reseau Docker interne
 
 Routage public:
@@ -103,6 +103,11 @@ Ce mode automatise:
 Quand `COMPOSE_FILES` inclut `docker-compose.airflow.yml`, le deploiement lance aussi
 `mi-airflow-db`, `mi-airflow-scheduler` et `mi-airflow-webserver`.
 
+Le fichier `.env.ovh` est le fichier autoritaire de production:
+
+- il pilote le deploy (`SSH_*`, `APP_DIR`, `COMPOSE_FILES`, TLS)
+- il est copie vers le VPS comme `.env` runtime quand `SYNC_DOTENV=true`
+
 ## 6) Verification
 
 Depuis le VPS:
@@ -148,4 +153,4 @@ bash scripts/deploy/deploy.ovh.sh proxy .env.ovh
 - Airflow UI inaccessible sur VPN:
   - verifier `AIRFLOW_WEBSERVER_BIND` (doit etre l'IP VPN du serveur)
   - verifier que le client est connecte au VPN
-  - verifier les regles firewall VPN sur le port 8080
+  - verifier les regles firewall VPN sur le port 18089

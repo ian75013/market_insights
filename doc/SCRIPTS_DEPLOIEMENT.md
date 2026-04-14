@@ -29,7 +29,7 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
 ## 2) Quick start OVH (Apache2 deja installe sur le VPS)
 
 1. Creer ton fichier env local:
-   cp scripts/deploy/env.ovh.example .env.ovh
+  cp scripts/deploy/env.ovh.example .env.ovh
 
 2. Editer .env.ovh et renseigner au minimum:
    - SSH_USER
@@ -46,7 +46,7 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
   - AIRFLOW_WEBSERVER_BIND (mettre l'IP VPN pour acces VPN-only)
 
   Notes:
-  - `SYNC_DOTENV=true` copie automatiquement le `.env` local vers le VPS avec permissions 600.
+  - `SYNC_DOTENV=true` copie automatiquement `.env.ovh` vers le VPS comme `.env` avec permissions 600.
   - `CERTBOT_AUTOCONFIG=true` genere/renouvelle le certificat LetsEncrypt avant application du vhost Apache.
   - Si `CERTBOT_AUTOCONFIG=false`, renseigner `SSL_CERT` et `SSL_KEY` manuellement.
 
@@ -110,7 +110,7 @@ Mode proxy:
   email requis par certbot quand CERTBOT_AUTOCONFIG=true
 
 - SYNC_DOTENV
-  true: copie .env local vers APP_DIR/.env (chmod 600)
+  true: copie le fichier `LOCAL_ENV_FILE` vers APP_DIR/.env (chmod 600)
   false: ne copie pas .env
 
 - SYNC_LOCAL_OVERLAY

@@ -115,6 +115,8 @@ docker compose -f docker-compose.ovh-apache.yml up -d --build
 
 Demarrage avec Airflow:
 
+Airflow UI on OVH defaults to port `18089` to avoid conflict with other stacks.
+
 ```bash
 docker compose -f docker-compose.ovh-apache.yml -f docker-compose.airflow.yml up -d --build
 ```
@@ -180,4 +182,4 @@ docker volume prune -f
   - `AIRFLOW_WEBSERVER_BIND=<IP_VPN_SERVEUR>`
 - Pour Airflow localhost-only:
   - `AIRFLOW_WEBSERVER_BIND=127.0.0.1`
-  - acces via tunnel SSH: `ssh -L 8080:127.0.0.1:8080 user@vps`
+  - acces via tunnel SSH: `ssh -L 18089:127.0.0.1:18089 user@vps`

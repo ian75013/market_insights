@@ -98,13 +98,13 @@ AIRFLOW_WEBSERVER_BIND=10.8.0.2
 Le port 8080 n'est alors plus exposé publiquement sur l'IP serveur. Depuis un client connecté au VPN:
 
 ```bash
-http://10.8.0.2:8080
+http://10.8.0.2:18089
 ```
 
 Si tu ne veux aucun bind réseau direct, garde `AIRFLOW_WEBSERVER_BIND=127.0.0.1` et passe par un tunnel SSH:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@ton-vps
+ssh -L 18089:127.0.0.1:18089 user@ton-vps
 ```
 
 Changer le modèle LiteLLM par défaut:

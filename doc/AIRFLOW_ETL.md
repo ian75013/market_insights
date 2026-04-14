@@ -43,7 +43,8 @@ AIRFLOW_ADMIN_EMAIL=admin@example.com
 
 # Exposition UI Airflow
 AIRFLOW_WEBSERVER_BIND=127.0.0.1
-AIRFLOW_BASE_URL=http://localhost:8080
+AIRFLOW_WEBSERVER_PORT=18089
+AIRFLOW_BASE_URL=http://localhost:18089
 ```
 
 Generation Fernet key:
@@ -70,7 +71,7 @@ docker logs -f mi-airflow-webserver
 
 UI Airflow:
 
-- URL: `http://127.0.0.1:8080`
+- URL: `http://127.0.0.1:18089`
 - User: `AIRFLOW_ADMIN_USER`
 - Password: `AIRFLOW_ADMIN_PASSWORD`
 
@@ -119,7 +120,8 @@ Si le serveur a une IP VPN (ex: `10.8.0.2`), forcer:
 
 ```dotenv
 AIRFLOW_WEBSERVER_BIND=10.8.0.2
-AIRFLOW_BASE_URL=http://10.8.0.2:8080
+AIRFLOW_WEBSERVER_PORT=18089
+AIRFLOW_BASE_URL=http://10.8.0.2:18089
 ```
 
 Puis relancer la stack compose avec Airflow.
@@ -127,7 +129,7 @@ Puis relancer la stack compose avec Airflow.
 Acces UI depuis client VPN:
 
 ```text
-http://10.8.0.2:8080
+http://10.8.0.2:18089
 ```
 
 ### Option stricte: localhost + tunnel
@@ -141,7 +143,7 @@ AIRFLOW_WEBSERVER_BIND=127.0.0.1
 Et utiliser:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 user@vps
+ssh -L 18089:127.0.0.1:18089 user@vps
 ```
 
 ## 7) Deployment script OVH
@@ -156,6 +158,7 @@ Exemple `.env.ovh` pour prod + Airflow:
 ```dotenv
 COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml
 AIRFLOW_WEBSERVER_BIND=10.8.0.2
+AIRFLOW_WEBSERVER_PORT=18089
 ```
 
 Deploiement:
