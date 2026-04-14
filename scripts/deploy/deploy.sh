@@ -204,18 +204,18 @@ if ! command -v ss >/dev/null 2>&1; then
 fi
 
 port_in_use() {
-  local p="$1"
+  local p="\$1"
   ss -ltn "sport = :\${p}" | awk 'NR>1 {print}' | grep -q .
 }
 
 docker_owns_port() {
-  local p="$1"
+  local p="\$1"
   run_sudo docker ps --format '{{.Ports}}' | grep -qE "(^|[ ,])[^,]*:\${p}->"
 }
 
 resolve_port() {
-  local name="$1"
-  local wanted="$2"
+  local name="\$1"
+  local wanted="\$2"
 
   if ! port_in_use "\${wanted}"; then
     printf '%s' "\${wanted}"

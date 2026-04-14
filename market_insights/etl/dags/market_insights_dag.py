@@ -5,14 +5,14 @@ Schedule: every day at 00:30 UTC (markets have closed globally by then).
 Pipeline per ticker
 -------------------
 1. extract_and_load_<TICKER>
-   Calls run_etl(db, ticker, provider) — the same function used by the API.
-   Stocks → Yahoo Finance.  Crypto → CoinGecko.
-   On failure the task retries up to 3 times with a 5-minute delay.
+    Calls run_etl(db, ticker, provider) — the same function used by the API.
+    Stocks → Yahoo Finance.  Crypto → CoinGecko.
+    On failure the task retries up to 3 times with a 5-minute delay.
 
 2. refresh_rag
-   Triggers /rag/index for every ticker via the internal API so the vector
-   store reflects fresh fundamentals and news.
-   Runs *after* all extract tasks succeed (downstream dependency).
+    Triggers /rag/index for every ticker via the internal API so the vector
+    store reflects fresh fundamentals and news.
+    Runs *after* all extract tasks succeed (downstream dependency).
 
 Parallelism
 -----------
@@ -140,4 +140,5 @@ with DAG(
 
     # All extracts must succeed before RAG refresh
     extract_tasks >> rag_task
+
 

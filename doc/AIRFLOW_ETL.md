@@ -17,7 +17,7 @@ Stack Airflow (override):
 - `airflow-scheduler` (`mi-airflow-scheduler`) : planification + execution DAG
 - `airflow-webserver` (`mi-airflow-webserver`) : UI Airflow
 
-Le DAG principal est dans `market_insights/etl/dags/market_insights_dag.py`:
+Le DAG principal historique est dans `market_insights/etl/dags/market_insights_dag.py`:
 
 - DAG: `market_insights_daily`
 - Schedule: `30 0 * * *` (00:30 UTC)
@@ -25,6 +25,38 @@ Le DAG principal est dans `market_insights/etl/dags/market_insights_dag.py`:
 - Parallelisme: jusqu'a 4 taches ETL en parallele
 - Routage provider: crypto -> `coingecko`, actions -> `yahoo`
 - Post-traitement: task `refresh_rag` apres toutes les extractions
+
+Le DAG operations principal pour la production VPS est maintenant `market_insights_full_refresh`:
+
+- Schedule par defaut: `0 5 * * *` (tous les matins a 05:00 UTC)
+- Retry par defaut: 7 retries avec delai de 1h, soit 8 tentatives max
+- Execution volontairement lisse en serie pour eviter les bursts reseau
+- Rechauffe les donnees utiles au site: macro, overview, technique, fondamentaux, news, RAG
+- Les chandeliers ne sont PAS precharges: endpoint inline uniquement (a la demande UI)
+- Variables optionnelles:
+  - `MI_FULL_REFRESH_SCHEDULE`
+  - `MI_AIRFLOW_RETRIES`
+  - `MI_AIRFLOW_RETRY_DELAY_HOURS`
+  - `MI_TICKERS`
+  - `MI_STOCK_PROVIDER`
+  - `MI_STOCK_ETL_COOLDOWN_SECONDS`
+  - `MI_CRYPTO_ETL_COOLDOWN_SECONDS`
+  - `MI_POST_RAG_COOLDOWN_SECONDS`
+  - `MI_TAB_COOLDOWN_SECONDS`
+  - `MI_GLOBAL_COOLDOWN_SECONDS`
+
+Des DAGs de fallback sont aussi generes automatiquement:
+
+- `market_insights_refresh_<ticker>` : relance un ticker complet
+- `market_insights_refresh_<ticker>_<onglet>` : relance un ticker sur un onglet cible
+
+Ces DAGs de fallback sont manuels, utiles si Yahoo Finance limite trop fort et qu'il faut decouper les executions.
+
+Ordre pratique recommande:
+
+1. laisser tourner `market_insights_full_refresh`
+2. si un ticker bloque ou se fait limiter, lancer `market_insights_refresh_<ticker>`
+3. si c'est encore trop lourd, lancer `market_insights_refresh_<ticker>_<onglet>`
 
 ## 2) Variables requises
 
@@ -87,6 +119,7 @@ Par CLI:
 
 ```bash
 docker exec -it mi-airflow-scheduler airflow dags trigger market_insights_daily
+docker exec -it mi-airflow-scheduler airflow dags trigger market_insights_full_refresh
 ```
 
 Test d'une tache:

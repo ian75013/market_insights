@@ -22,8 +22,10 @@ from market_insights.connectors.open_data.news import (
     MultiNewsConnector,
     SampleNewsConnector,
 )
+from market_insights.connectors.open_data.macro import FREDConnector, SampleMacroConnector
 from market_insights.core.config import settings
 from market_insights.etl.extractors.price_provider import PriceProviderRouter, canonical_ticker, is_crypto
+from market_insights.etl.loaders.macro_loader import replace_macro_metrics
 from market_insights.etl.loaders.document_loader import replace_documents
 from market_insights.etl.loaders.sqlite_loader import load_price_bars
 from market_insights.etl.transformers.cleaning import clean_market_data
@@ -138,6 +140,20 @@ def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
         replace_documents(db, ticker, source="open_data", docs=docs) if docs else 0
     )
 
+    # 5. Macro snapshot (top ribbon: Fed Funds, 10Y, CPI, Unemp, VIX, GDP)
+    macro_loaded = 0
+    try:
+        fred = FREDConnector()
+        if fred.available():
+            macro = fred.fetch_macro_dashboard()
+            macro_source = "fred"
+        else:
+            macro = SampleMacroConnector().fetch()
+            macro_source = "sample"
+        macro_loaded = replace_macro_metrics(db, macro, source=macro_source)
+    except Exception as exc:
+        logger.warning("Macro snapshot ingestion failed: %s", exc)
+
     elapsed = (datetime.now(UTC) - started).total_seconds()
 
     return {
@@ -146,6 +162,7 @@ def run_etl(db: Session, ticker: str, provider: str | None = None) -> dict:
         "loaded_rows": loaded_bars,
         "feature_rows": len(featured),
         "loaded_docs": loaded_docs,
+        "loaded_macro": macro_loaded,
         "elapsed_seconds": round(elapsed, 2),
         "timestamp": started.isoformat(),
     }

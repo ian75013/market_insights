@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { loadFullAnalysis, runEtl, getMacro } from "../services/api";
 
 /**
- * Hook: loads all analysis data for a ticker (including candlestick).
+ * Hook: loads analysis data for a ticker (candlestick is loaded on demand in CandlestickTab).
  * Returns { data, macro, loading, error, reload, runPipeline }
  */
 export function useAnalysis(ticker) {

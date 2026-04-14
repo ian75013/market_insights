@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from market_insights.core.cache import cache_store
@@ -306,12 +307,20 @@ def news(ticker: str, limit: int = Query(10, ge=1, le=50)):
 
 
 @app.get("/macro", tags=["data"])
-def macro_dashboard():
+def macro_dashboard(db: Session = Depends(get_db)):
     try:
+        from market_insights.db.models import MacroMetric
         from market_insights.connectors.open_data.macro import (
             FREDConnector,
             SampleMacroConnector,
         )
+
+        rows = db.execute(select(MacroMetric).order_by(MacroMetric.metric_key.asc())).scalars().all()
+        if rows:
+            data = {row.metric_key: row.metric_value for row in rows}
+            as_of = max(row.updated_at for row in rows if row.updated_at is not None)
+            source = rows[0].source if rows[0].source else "db"
+            return {"source": source, "as_of": as_of.isoformat() if as_of else None, "data": data}
 
         fred = FREDConnector()
         if fred.available():
