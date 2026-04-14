@@ -244,7 +244,7 @@ done
 API_BIND_PORT="\$(resolve_port API_BIND_PORT "\${API_BIND_PORT:-18000}")"
 FRONTEND_BIND_PORT="\$(resolve_port FRONTEND_BIND_PORT "\${FRONTEND_BIND_PORT:-18080}")"
 
-if [ "$airflow_enabled" = true ]; then
+if [ "\$airflow_enabled" = true ]; then
   AIRFLOW_WEBSERVER_PORT="\$(resolve_port AIRFLOW_WEBSERVER_PORT "\${AIRFLOW_WEBSERVER_PORT:-18089}")"
   if [ "\${AIRFLOW_WEBSERVER_BIND:-127.0.0.1}" != "127.0.0.1" ] && ! ip -o addr show | grep -q " \${AIRFLOW_WEBSERVER_BIND}/"; then
     echo "[deploy][error] AIRFLOW_WEBSERVER_BIND=\${AIRFLOW_WEBSERVER_BIND} is not configured on the VPS." >&2
