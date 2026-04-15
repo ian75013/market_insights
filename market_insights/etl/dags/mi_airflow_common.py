@@ -80,11 +80,19 @@ def load_tickers() -> list[str]:
 
 
 def provider_for_ticker(ticker: str) -> str:
-    return "coingecko" if ticker.upper() in CRYPTO_TICKERS else os.getenv("MI_STOCK_PROVIDER", "yahoo")
+    return (
+        "coingecko"
+        if ticker.upper() in CRYPTO_TICKERS
+        else os.getenv("MI_STOCK_PROVIDER", "yahoo")
+    )
 
 
 def etl_cooldown_for_ticker(ticker: str) -> int:
-    return CRYPTO_ETL_COOLDOWN_SECONDS if ticker.upper() in CRYPTO_TICKERS else STOCK_ETL_COOLDOWN_SECONDS
+    return (
+        CRYPTO_ETL_COOLDOWN_SECONDS
+        if ticker.upper() in CRYPTO_TICKERS
+        else STOCK_ETL_COOLDOWN_SECONDS
+    )
 
 
 def session_factory():
@@ -135,7 +143,11 @@ def warm_global_data(log_prefix: str = "[AIRFLOW]") -> None:
         logger.info("%s[GLOBAL] Warmed %s", log_prefix, endpoint_name)
 
 
-def warm_tab_for_ticker(ticker: str, tab_name: str, log_prefix: str = "[AIRFLOW]") -> None:
+def warm_tab_for_ticker(
+    ticker: str,
+    tab_name: str,
+    log_prefix: str = "[AIRFLOW]",
+) -> None:
     endpoints = TAB_ENDPOINTS[tab_name]
     for endpoint_name, template in endpoints:
         _call_api(template.format(ticker=ticker))

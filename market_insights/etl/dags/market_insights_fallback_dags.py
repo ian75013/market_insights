@@ -15,7 +15,19 @@ from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-from mi_airflow_common import GLOBAL_COOLDOWN_SECONDS, POST_RAG_COOLDOWN_SECONDS, TAB_COOLDOWN_SECONDS, TAB_ENDPOINTS, build_default_args, cooldown, load_tickers, refresh_rag_for_ticker, run_ticker_etl, warm_global_data, warm_tab_for_ticker
+from mi_airflow_common import (
+    GLOBAL_COOLDOWN_SECONDS,
+    POST_RAG_COOLDOWN_SECONDS,
+    TAB_COOLDOWN_SECONDS,
+    TAB_ENDPOINTS,
+    build_default_args,
+    cooldown,
+    load_tickers,
+    refresh_rag_for_ticker,
+    run_ticker_etl,
+    warm_global_data,
+    warm_tab_for_ticker,
+)
 
 
 def _make_ticker_etl_task(ticker: str):
@@ -31,7 +43,11 @@ def _make_global_task(ticker: str):
 
 
 def _make_tab_task(ticker: str, tab_name: str):
-    return lambda **_ctx: warm_tab_for_ticker(ticker, tab_name, log_prefix=f"[{ticker}:{tab_name}] ")
+    return lambda **_ctx: warm_tab_for_ticker(
+        ticker,
+        tab_name,
+        log_prefix=f"[{ticker}:{tab_name}] ",
+    )
 
 
 def _make_cooldown_task(label: str, seconds: int, prefix: str):
@@ -62,7 +78,11 @@ for ticker in load_tickers():
         )
         rag_gap = PythonOperator(
             task_id="cooldown_after_rag",
-            python_callable=_make_cooldown_task("after rag", POST_RAG_COOLDOWN_SECONDS, f"[{ticker}] "),
+            python_callable=_make_cooldown_task(
+                "after rag",
+                POST_RAG_COOLDOWN_SECONDS,
+                f"[{ticker}] ",
+            ),
         )
         global_task = PythonOperator(
             task_id="warm_macro",
@@ -70,7 +90,11 @@ for ticker in load_tickers():
         )
         global_gap = PythonOperator(
             task_id="cooldown_after_macro",
-            python_callable=_make_cooldown_task("after macro", GLOBAL_COOLDOWN_SECONDS, f"[{ticker}] "),
+            python_callable=_make_cooldown_task(
+                "after macro",
+                GLOBAL_COOLDOWN_SECONDS,
+                f"[{ticker}] ",
+            ),
         )
 
         previous_task = etl_task
@@ -122,7 +146,11 @@ for ticker in load_tickers():
             )
             global_gap = PythonOperator(
                 task_id="cooldown_after_macro",
-                python_callable=_make_cooldown_task("after macro", GLOBAL_COOLDOWN_SECONDS, f"[{ticker}:{tab_name}] "),
+                python_callable=_make_cooldown_task(
+                    "after macro",
+                    GLOBAL_COOLDOWN_SECONDS,
+                    f"[{ticker}:{tab_name}] ",
+                ),
             )
             tab_task = PythonOperator(
                 task_id=f"warm_{tab_name}",

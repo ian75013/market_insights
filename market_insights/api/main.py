@@ -22,12 +22,19 @@ from market_insights.core.cache import cache_store
 from market_insights.core.config import settings
 from market_insights.db.bootstrap import init_db
 from market_insights.db.session import get_db
-from market_insights.etl.extractors.price_provider import PriceProviderRouter, canonical_ticker
+from market_insights.etl.extractors.price_provider import (
+    PriceProviderRouter,
+    canonical_ticker,
+)
 from market_insights.schemas.market import FairValueResponse
 from market_insights.services.etl_service import run_batch_etl, run_etl
 from market_insights.services.hybrid_insight_service import HybridInsightService
 from market_insights.services.market_service import MarketInsightService
-from market_insights.llm.providers import is_public_provider, list_providers, public_provider_names
+from market_insights.llm.providers import (
+    is_public_provider,
+    list_providers,
+    public_provider_names,
+)
 
 logger = logging.getLogger("mi.scheduler")
 
@@ -68,7 +75,10 @@ def _validate_llm_backend(backend: str | None) -> str | None:
     if backend and not is_public_provider(backend):
         raise HTTPException(
             status_code=400,
-            detail="Le provider 'ollama' n'est pas exposé par l'application. Utilise 'litellm'.",
+            detail=(
+                "Le provider 'ollama' n'est pas exposé par "
+                "l'application. Utilise 'litellm'."
+            ),
         )
     return backend
 
@@ -315,12 +325,25 @@ def macro_dashboard(db: Session = Depends(get_db)):
             SampleMacroConnector,
         )
 
-        rows = db.execute(select(MacroMetric).order_by(MacroMetric.metric_key.asc())).scalars().all()
+        try:
+            rows = (
+                db.execute(
+                    select(MacroMetric).order_by(MacroMetric.metric_key.asc())
+                )
+                .scalars()
+                .all()
+            )
+        except Exception:
+            rows = []
         if rows:
             data = {row.metric_key: row.metric_value for row in rows}
             as_of = max(row.updated_at for row in rows if row.updated_at is not None)
             source = rows[0].source if rows[0].source else "db"
-            return {"source": source, "as_of": as_of.isoformat() if as_of else None, "data": data}
+            return {
+                "source": source,
+                "as_of": as_of.isoformat() if as_of else None,
+                "data": data,
+            }
 
         fred = FREDConnector()
         if fred.available():

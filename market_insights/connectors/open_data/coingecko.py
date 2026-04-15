@@ -131,7 +131,11 @@ class CoinGeckoPriceConnector(BaseHTTPConnector):
                 )
                 df["volume"] = df["volume_mc"].fillna(0.0)
                 df = df.drop(
-                    columns=[c for c in df.columns if c.endswith("_mc") or c == "date_key"],
+                    columns=[
+                        c
+                        for c in df.columns
+                        if c.endswith("_mc") or c == "date_key"
+                    ],
                     errors="ignore",
                 )
         except Exception as exc:

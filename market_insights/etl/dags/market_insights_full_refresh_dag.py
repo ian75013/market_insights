@@ -23,7 +23,21 @@ from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 
-from mi_airflow_common import FULL_REFRESH_SCHEDULE, GLOBAL_COOLDOWN_SECONDS, POST_RAG_COOLDOWN_SECONDS, TAB_COOLDOWN_SECONDS, TAB_ENDPOINTS, build_default_args, cooldown, etl_cooldown_for_ticker, load_tickers, refresh_rag_for_ticker, run_ticker_etl, warm_global_data, warm_tab_for_ticker
+from mi_airflow_common import (
+    FULL_REFRESH_SCHEDULE,
+    GLOBAL_COOLDOWN_SECONDS,
+    POST_RAG_COOLDOWN_SECONDS,
+    TAB_COOLDOWN_SECONDS,
+    TAB_ENDPOINTS,
+    build_default_args,
+    cooldown,
+    etl_cooldown_for_ticker,
+    load_tickers,
+    refresh_rag_for_ticker,
+    run_ticker_etl,
+    warm_global_data,
+    warm_tab_for_ticker,
+)
 
 _TICKERS = load_tickers()
 
@@ -37,7 +51,11 @@ def _make_rag_task(ticker: str):
 
 
 def _make_tab_task(ticker: str, tab_name: str):
-    return lambda **_ctx: warm_tab_for_ticker(ticker, tab_name, log_prefix="[FULL-REFRESH] ")
+    return lambda **_ctx: warm_tab_for_ticker(
+        ticker,
+        tab_name,
+        log_prefix="[FULL-REFRESH] ",
+    )
 
 
 def _make_cooldown_task(label: str, seconds: int):
@@ -119,7 +137,10 @@ with DAG(
 
     final_gap = PythonOperator(
         task_id="cooldown_before_macro_final",
-        python_callable=_make_cooldown_task("before final macro", GLOBAL_COOLDOWN_SECONDS),
+        python_callable=_make_cooldown_task(
+            "before final macro",
+            GLOBAL_COOLDOWN_SECONDS,
+        ),
     )
 
     previous_task >> final_gap >> end_macro_task

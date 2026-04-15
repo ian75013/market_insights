@@ -22,9 +22,16 @@ from market_insights.connectors.open_data.news import (
     MultiNewsConnector,
     SampleNewsConnector,
 )
-from market_insights.connectors.open_data.macro import FREDConnector, SampleMacroConnector
+from market_insights.connectors.open_data.macro import (
+    FREDConnector,
+    SampleMacroConnector,
+)
 from market_insights.core.config import settings
-from market_insights.etl.extractors.price_provider import PriceProviderRouter, canonical_ticker, is_crypto
+from market_insights.etl.extractors.price_provider import (
+    PriceProviderRouter,
+    canonical_ticker,
+    is_crypto,
+)
 from market_insights.etl.loaders.macro_loader import replace_macro_metrics
 from market_insights.etl.loaders.document_loader import replace_documents
 from market_insights.etl.loaders.sqlite_loader import load_price_bars
