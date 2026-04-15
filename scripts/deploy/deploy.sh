@@ -18,6 +18,22 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing command: $1"
 }
 
+load_env_file() {
+  local env_file="${LOCAL_ENV_FILE:-$ROOT_DIR/.env}"
+
+  if [[ "$env_file" != /* ]]; then
+    env_file="$ROOT_DIR/$env_file"
+  fi
+
+  if [ -f "$env_file" ]; then
+    log "Loading env vars from $env_file"
+    set -a
+    # shellcheck disable=SC1090
+    source "$env_file"
+    set +a
+  fi
+}
+
 remote_sudo_mode() {
   if [ "${ASK_SUDO_PASSWORD:-false}" = "true" ]; then
     printf '%s' "prompt"
@@ -204,18 +220,18 @@ if ! command -v ss >/dev/null 2>&1; then
 fi
 
 port_in_use() {
-  local p="\$1"
+  local p="$1"
   ss -ltn "sport = :\${p}" | awk 'NR>1 {print}' | grep -q .
 }
 
 docker_owns_port() {
-  local p="\$1"
+  local p="$1"
   run_sudo docker ps --format '{{.Ports}}' | grep -qE "(^|[ ,])[^,]*:\${p}->"
 }
 
 resolve_port() {
-  local name="\$1"
-  local wanted="\$2"
+  local name="$1"
+  local wanted="$2"
 
   if ! port_in_use "\${wanted}"; then
     printf '%s' "\${wanted}"
@@ -405,8 +421,8 @@ deploy_ovh_apache() {
   local certbot_autoconfig="${CERTBOT_AUTOCONFIG:-false}"
   local certbot_email="${CERTBOT_EMAIL:-}"
   local app_domain="${APP_DOMAIN:-}"
-  local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem}"
-  local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem}"
+  local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${app_domain}/fullchain.pem}"
+  local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${app_domain}/privkey.pem}"
   local api_bind_port="${API_BIND_PORT:-18000}"
   local frontend_bind_port="${FRONTEND_BIND_PORT:-18080}"
   local airflow_webserver_bind="${AIRFLOW_WEBSERVER_BIND:-127.0.0.1}"
@@ -463,8 +479,8 @@ deploy_ovh_proxy_only() {
   local ssh_port="${SSH_PORT:-22}"
   local app_dir="${APP_DIR:-/opt/market_insights}"
   local app_domain="${APP_DOMAIN:-}"
-  local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem}"
-  local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem}"
+  local ssl_cert="${SSL_CERT:-/etc/letsencrypt/live/${app_domain}/fullchain.pem}"
+  local ssl_key="${SSL_KEY:-/etc/letsencrypt/live/${app_domain}/privkey.pem}"
   local api_bind_port="${API_BIND_PORT:-18000}"
   local frontend_bind_port="${FRONTEND_BIND_PORT:-18080}"
   local sudo_mode
@@ -523,6 +539,11 @@ EOF
 }
 
 main() {
+  # Note: load_env_file is available but NOT auto-called.
+  # Export vars yourself or use env vars: 
+  # $ export SSH_USER=yannsmatti SSH_HOST=doctumconsilium.com GIT_REPO=git@github.com:ian75013/market_insights.git
+  # $ scripts/deploy/deploy.sh ovh-apache
+
   local target="${1:-}"
   case "$target" in
     ovh-apache)
