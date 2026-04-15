@@ -56,11 +56,11 @@ export const getRagStats = () => request("/rag/stats");
 
 /* ━━ Aggregate loader ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 export async function loadFullAnalysis(ticker) {
-  const [hybrid, fairValue, comparable, insight, sources, fundamentals, news, candlestick] =
+  const [hybrid, fairValue, comparable, insight, sources, fundamentals, news] =
     await Promise.allSettled([
       getHybrid(ticker), getFairValue(ticker), getComparable(ticker),
       getInsight(ticker), getRagSources(ticker), getFundamentals(ticker),
-      getNews(ticker), getCandlestick(ticker),
+      getNews(ticker),
     ]);
   return {
     hybrid: hybrid.status === "fulfilled" ? hybrid.value : null,
@@ -70,7 +70,7 @@ export async function loadFullAnalysis(ticker) {
     sources: sources.status === "fulfilled" ? sources.value : null,
     fundamentals: fundamentals.status === "fulfilled" ? fundamentals.value : null,
     news: news.status === "fulfilled" ? news.value : null,
-    candlestick: candlestick.status === "fulfilled" ? candlestick.value : null,
+    candlestick: null,
   };
 }
 

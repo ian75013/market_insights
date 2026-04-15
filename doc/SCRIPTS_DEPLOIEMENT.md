@@ -29,7 +29,7 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
 ## 2) Quick start OVH (Apache2 deja installe sur le VPS)
 
 1. Creer ton fichier env local:
-   cp scripts/deploy/env.ovh.example .env.ovh
+  cp scripts/deploy/env.ovh.example .env.ovh
 
 2. Editer .env.ovh et renseigner au minimum:
    - SSH_USER
@@ -38,8 +38,15 @@ Ce document explique les scripts ajoutes dans scripts/deploy pour deployer marke
    - APP_DOMAIN
   - CERTBOT_EMAIL (si CERTBOT_AUTOCONFIG=true)
 
+  Pour activer Airflow en prod:
+  - COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml
+  - AIRFLOW_FERNET_KEY
+  - AIRFLOW_SECRET_KEY
+  - AIRFLOW_ADMIN_PASSWORD
+  - AIRFLOW_WEBSERVER_BIND (mettre l'IP VPN pour acces VPN-only)
+
   Notes:
-  - `SYNC_DOTENV=true` copie automatiquement le `.env` local vers le VPS avec permissions 600.
+  - `SYNC_DOTENV=true` copie automatiquement `.env.ovh` vers le VPS comme `.env` avec permissions 600.
   - `CERTBOT_AUTOCONFIG=true` genere/renouvelle le certificat LetsEncrypt avant application du vhost Apache.
   - Si `CERTBOT_AUTOCONFIG=false`, renseigner `SSL_CERT` et `SSL_KEY` manuellement.
 
@@ -75,8 +82,18 @@ Mode proxy:
   Fichier compose a lancer sur VPS
   Defaut recommande: docker-compose.ovh-apache.yml
 
+- COMPOSE_FILES
+  Liste de fichiers compose separes par des virgules (sans espaces).
+  Prioritaire sur COMPOSE_FILE quand renseigne.
+  Exemple:
+  docker-compose.ovh-apache.yml,docker-compose.airflow.yml
+
 - APP_DOMAIN
   Domaine public frontend/API (avec routage /api)
+
+- AIRFLOW_WEBSERVER_BIND
+  IP de bind du webserver Airflow. Pour exposition VPN uniquement,
+  utiliser l'IP VPN du serveur (ex: 10.8.0.2) plutot que 0.0.0.0.
 
 - SSL_CERT, SSL_KEY
   Chemins certificats pour Apache
@@ -93,7 +110,7 @@ Mode proxy:
   email requis par certbot quand CERTBOT_AUTOCONFIG=true
 
 - SYNC_DOTENV
-  true: copie .env local vers APP_DIR/.env (chmod 600)
+  true: copie le fichier `LOCAL_ENV_FILE` vers APP_DIR/.env (chmod 600)
   false: ne copie pas .env
 
 - SYNC_LOCAL_OVERLAY

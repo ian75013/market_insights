@@ -54,7 +54,7 @@ class MarketInsightService:
         )
         if not rows:
             raise ValueError(f"No price data found for ticker={ticker}. Run ETL first.")
-        return pd.DataFrame(
+        df = pd.DataFrame(
             [
                 {
                     "ticker": r.ticker,
@@ -68,6 +68,9 @@ class MarketInsightService:
                 for r in rows
             ]
         )
+        # Garde-fou lecture: élimine tout doublon résiduel par date.
+        df = df.sort_values("date").drop_duplicates(subset=["date"], keep="last")
+        return df.reset_index(drop=True)
 
     def compute_fair_value(self, db: Session, ticker: str) -> dict:
         fundamentals = self._get_fundamentals(ticker)

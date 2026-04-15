@@ -81,7 +81,12 @@ class PriceProviderRouter:
         # ── Crypto guard: redirect non-CoinGecko providers to CoinGecko ──
         # Yahoo, Stooq, Alpha Vantage return wrong data for bare crypto
         # tickers like "BTC" (e.g. Grayscale trust at $31 instead of Bitcoin).
-        if _is_crypto(ticker) and provider in ("yahoo", "stooq", "alpha", "alpha_vantage"):
+        if _is_crypto(ticker) and provider in (
+            "yahoo",
+            "stooq",
+            "alpha",
+            "alpha_vantage",
+        ):
             logger.info(
                 "Crypto ticker %s detected — redirecting from %s to coingecko",
                 ticker, provider,

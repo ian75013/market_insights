@@ -5,14 +5,14 @@ Schedule: every day at 00:30 UTC (markets have closed globally by then).
 Pipeline per ticker
 -------------------
 1. extract_and_load_<TICKER>
-   Calls run_etl(db, ticker, provider) — the same function used by the API.
-   Stocks → Yahoo Finance.  Crypto → CoinGecko.
-   On failure the task retries up to 3 times with a 5-minute delay.
+    Calls run_etl(db, ticker, provider) — the same function used by the API.
+    Stocks → Yahoo Finance.  Crypto → CoinGecko.
+    On failure the task retries up to 3 times with a 5-minute delay.
 
 2. refresh_rag
-   Triggers /rag/index for every ticker via the internal API so the vector
-   store reflects fresh fundamentals and news.
-   Runs *after* all extract tasks succeed (downstream dependency).
+    Triggers /rag/index for every ticker via the internal API so the vector
+    store reflects fresh fundamentals and news.
+    Runs *after* all extract tasks succeed (downstream dependency).
 
 Parallelism
 -----------
@@ -52,7 +52,18 @@ _CRYPTO: set[str] = {
     "BTC", "ETH", "SOL", "ADA", "DOGE", "DOT", "AVAX",
     "MATIC", "LINK", "UNI", "XRP", "BNB", "ATOM", "LTC", "NEAR",
 }
-_TICKERS: list[str] = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "JNJ", "BTC"]
+_TICKERS: list[str] = [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "TSLA",
+    "JPM",
+    "JNJ",
+    "BTC",
+]
 
 _MI_API_BASE = os.getenv("MI_API_BASE", "http://mi-api:8000")
 
@@ -70,7 +81,6 @@ _DEFAULT_ARGS = {
 
 def _etl_ticker(ticker: str, **_ctx) -> dict:
     """Extract + load a single ticker.  Called by PythonOperator."""
-    from market_insights.core.config import settings
     from market_insights.db.session import SessionLocal
     from market_insights.services.etl_service import run_etl
 
@@ -115,7 +125,10 @@ def _refresh_rag(**_ctx) -> None:
 
 with DAG(
     dag_id="market_insights_daily",
-    description="Daily ETL: prices + fundamentals + news for all tickers, then RAG refresh",
+    description=(
+        "Daily ETL: prices + fundamentals + news for all tickers, "
+        "then RAG refresh"
+    ),
     start_date=datetime(2026, 1, 1),
     schedule="30 0 * * *",   # 00:30 UTC every day
     catchup=False,
@@ -140,4 +153,5 @@ with DAG(
 
     # All extracts must succeed before RAG refresh
     extract_tasks >> rag_task
+
 

@@ -9,6 +9,11 @@ Ce guide couvre le deploiement de `market_insights` sur VPS OVH avec Apache2 sur
 - Frontend conteneur: 127.0.0.1:18080
 - PostgreSQL: reseau Docker interne
 
+Option Airflow (nouveau):
+
+- Airflow webserver: `127.0.0.1:18089` (ou IP VPN via `AIRFLOW_WEBSERVER_BIND`)
+- Airflow scheduler + metadata DB: reseau Docker interne
+
 Routage public:
 
 - `/` -> frontend React
@@ -68,6 +73,12 @@ cp scripts/deploy/env.ovh.example .env.ovh
 - `APP_DOMAIN`
 - `CERTBOT_EMAIL` (si `CERTBOT_AUTOCONFIG=true`)
 
+Pour integrer Airflow en production:
+
+- `COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml`
+- variables Airflow (`AIRFLOW_FERNET_KEY`, `AIRFLOW_SECRET_KEY`, `AIRFLOW_ADMIN_PASSWORD`)
+- pour VPN uniquement: `AIRFLOW_WEBSERVER_BIND=<IP_VPN_DU_SERVEUR>`
+
 Flags recommandes:
 
 - `SYNC_LOCAL_OVERLAY=true`
@@ -89,6 +100,14 @@ Ce mode automatise:
 - Certbot (optionnel selon flag)
 - generation + activation du vhost Apache
 
+Quand `COMPOSE_FILES` inclut `docker-compose.airflow.yml`, le deploiement lance aussi
+`mi-airflow-db`, `mi-airflow-scheduler` et `mi-airflow-webserver`.
+
+Le fichier `.env.ovh` est le fichier autoritaire de production:
+
+- il pilote le deploy (`SSH_*`, `APP_DIR`, `COMPOSE_FILES`, TLS)
+- il est copie vers le VPS comme `.env` runtime quand `SYNC_DOTENV=true`
+
 ## 6) Verification
 
 Depuis le VPS:
@@ -98,6 +117,11 @@ docker compose -f docker-compose.ovh-apache.yml ps
 docker compose -f docker-compose.ovh-apache.yml logs -f api
 curl -s http://127.0.0.1:18000/health
 curl -I http://127.0.0.1:18080
+
+# Si Airflow est active:
+docker compose -f docker-compose.ovh-apache.yml -f docker-compose.airflow.yml ps
+docker logs --tail=200 mi-airflow-scheduler
+docker logs --tail=200 mi-airflow-webserver
 ```
 
 Depuis ton poste:
@@ -125,3 +149,8 @@ bash scripts/deploy/deploy.ovh.sh proxy .env.ovh
   - `sudo systemctl status apache2 --no-pager`
 - 502 sur `/api`:
   - verifier API locale sur `127.0.0.1:18000`
+
+- Airflow UI inaccessible sur VPN:
+  - verifier `AIRFLOW_WEBSERVER_BIND` (doit etre l'IP VPN du serveur)
+  - verifier que le client est connecte au VPN
+  - verifier les regles firewall VPN sur le port 18089

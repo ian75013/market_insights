@@ -1,6 +1,11 @@
 """Tests for public LLM provider exposure."""
 
-from market_insights.llm.providers import FallbackProvider, get_llm, is_public_provider, list_providers
+from market_insights.llm.providers import (
+    FallbackProvider,
+    get_llm,
+    is_public_provider,
+    list_providers,
+)
 
 
 def test_fallback_always_available():

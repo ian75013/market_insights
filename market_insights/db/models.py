@@ -37,3 +37,15 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC)
     )
+
+
+class MacroMetric(Base):
+    __tablename__ = "macro_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    metric_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    metric_value: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(32), default="sample")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC)
+    )

@@ -1,239 +1,212 @@
-# Airflow ETL — Market Insights
+# Airflow ETL - Market Insights
 
-> Branch: `feature/airflow-etl`
+Ce guide couvre l'orchestration ETL avec Airflow pour Market Insights, en local et en production OVH.
 
----
+## 1) Architecture actuelle
 
-## Architecture
+Stack applicative:
 
-```
-┌────────────────────────────────────────────────────────┐
-│                   docker compose                        │
-│                                                         │
-│  docker-compose.prod.yml  +  docker-compose.airflow.yml │
-│                                                         │
-│  ┌──────────────┐  ┌────────────┐  ┌─────────────────┐ │
-│  │  mi-api      │  │ mi-frontend│  │    mi-db         │ │
-│  │  (FastAPI)   │  │  (React)   │  │  (Postgres 16)   │ │
-│  └──────────────┘  └────────────┘  └─────────────────┘ │
-│                                                         │
-│  ┌──────────────┐  ┌────────────────────────────────┐  │
-│  │  airflow-db  │  │  airflow-scheduler              │  │
-│  │ (Postgres 16)│  │  runs DAGs via LocalExecutor   │  │
-│  └──────────────┘  │                                │  │
-│                    │  ┌──────────────────────────┐  │  │
-│                    │  │  market_insights_daily   │  │  │
-│                    │  │                          │  │  │
-│                    │  │  extract_aapl ──────┐    │  │  │
-│                    │  │  extract_msft ──────┤    │  │  │
-│                    │  │  extract_nvda ──────┤──► refresh_rag
-│                    │  │       …             │    │  │  │
-│                    │  │  extract_btc  ──────┘    │  │  │
-│                    │  └──────────────────────────┘  │  │
-│                    └────────────────────────────────┘  │
-│                                                         │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  airflow-webserver  (port 8080)                   │  │
-│  └──────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
-```
+- `db` (`mi-db`) : Postgres applicatif Market Insights
+- `api` (`mi-api`) : FastAPI
+- `frontend` (`mi-frontend`) : React build
 
-**Key design decisions:**
-- `LocalExecutor` — no Celery/Redis overhead for a single VPS node.
-- Dedicated `airflow-db` Postgres — keeps Airflow metadata isolated from app data.
-- The DAGs folder is mounted **read-only** into the containers → edit DAGs on the host without rebuilding.
-- `market_insights` Python package is installed from `deploy/airflow/requirements-airflow.txt` at container init time.
-- All 10 extract tasks run **in parallel** (up to 4 at once) then `refresh_rag` waits on all of them.
+Stack Airflow (override):
 
----
+- `airflow-db` (`mi-airflow-db`) : Postgres dedie metadata Airflow
+- `airflow-init` (`mi-airflow-init`) : migration DB Airflow + creation user admin
+- `airflow-scheduler` (`mi-airflow-scheduler`) : planification + execution DAG
+- `airflow-webserver` (`mi-airflow-webserver`) : UI Airflow
 
-## DAG — `market_insights_daily`
+Le DAG principal historique est dans `market_insights/etl/dags/market_insights_dag.py`:
 
-| Field | Value |
-|---|---|
-| Schedule | `30 0 * * *` (00:30 UTC) |
-| Catchup | `False` |
-| Max parallel tasks | 4 |
-| Retries per task | 3 × 5 min delay |
+- DAG: `market_insights_daily`
+- Schedule: `30 0 * * *` (00:30 UTC)
+- Retry: 3 tentatives avec delai 5 min
+- Parallelisme: jusqu'a 4 taches ETL en parallele
+- Routage provider: crypto -> `coingecko`, actions -> `yahoo`
+- Post-traitement: task `refresh_rag` apres toutes les extractions
 
-### Tasks
+Le DAG operations principal pour la production VPS est maintenant `market_insights_full_refresh`:
 
-| Task ID | What it does |
-|---|---|
-| `extract_aapl` … `extract_btc` | Calls `run_etl(db, ticker, provider)` for one ticker |
-| `refresh_rag` | POST `/rag/index/<ticker>` for every ticker via the internal API |
+- Schedule par defaut: `0 5 * * *` (tous les matins a 05:00 UTC)
+- Retry par defaut: 7 retries avec delai de 1h, soit 8 tentatives max
+- Execution volontairement lisse en serie pour eviter les bursts reseau
+- Rechauffe les donnees utiles au site: macro, overview, technique, fondamentaux, news, RAG
+- Les chandeliers ne sont PAS precharges: endpoint inline uniquement (a la demande UI)
+- Variables optionnelles:
+  - `MI_FULL_REFRESH_SCHEDULE`
+  - `MI_AIRFLOW_RETRIES`
+  - `MI_AIRFLOW_RETRY_DELAY_HOURS`
+  - `MI_TICKERS`
+  - `MI_STOCK_PROVIDER`
+  - `MI_STOCK_ETL_COOLDOWN_SECONDS`
+  - `MI_CRYPTO_ETL_COOLDOWN_SECONDS`
+  - `MI_POST_RAG_COOLDOWN_SECONDS`
+  - `MI_TAB_COOLDOWN_SECONDS`
+  - `MI_GLOBAL_COOLDOWN_SECONDS`
 
-Provider routing: tickers in `_CRYPTO` set → `coingecko`, everything else → `yahoo`.
+Des DAGs de fallback sont aussi generes automatiquement:
 
----
+- `market_insights_refresh_<ticker>` : relance un ticker complet
+- `market_insights_refresh_<ticker>_<onglet>` : relance un ticker sur un onglet cible
 
-## Prerequisites
+Ces DAGs de fallback sont manuels, utiles si Yahoo Finance limite trop fort et qu'il faut decouper les executions.
 
-- Docker + Docker Compose v2
-- The `feature/airflow-etl` branch checked out
-- Access to `.env` (or `.env.ovh`) variables described below
+Ordre pratique recommande:
 
----
+1. laisser tourner `market_insights_full_refresh`
+2. si un ticker bloque ou se fait limiter, lancer `market_insights_refresh_<ticker>`
+3. si c'est encore trop lourd, lancer `market_insights_refresh_<ticker>_<onglet>`
 
-## Environment Variables
+## 2) Variables requises
 
-Add these to your `.env` (or `.env.ovh` for VPS) **in addition** to the existing market_insights vars:
+Ajouter ces variables dans `.env` (ou `.env.ovh` en prod):
 
 ```dotenv
-# ── Airflow ───────────────────────────────────────────────────────────────────
-# Generate with:
-#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+AIRFLOW_DB_USER=airflow
+AIRFLOW_DB_PASSWORD=CHANGE_ME_AIRFLOW_DB
+AIRFLOW_DB_NAME=airflow
+
 AIRFLOW_FERNET_KEY=<base64-fernet-key>
+AIRFLOW_SECRET_KEY=<random-secret-32+chars>
+AIRFLOW_ADMIN_USER=admin
+AIRFLOW_ADMIN_PASSWORD=<strong-password>
+AIRFLOW_ADMIN_EMAIL=admin@example.com
 
-# Random string (32+ chars) used to sign Airflow sessions
-AIRFLOW_SECRET_KEY=<random-secret>
-
-# Password for the Airflow admin UI user (username: admin)
-AIRFLOW_ADMIN_PASSWORD=<choose-a-password>
-
-# Optional — bind webserver to localhost only (default) or a specific IP
+# Exposition UI Airflow
 AIRFLOW_WEBSERVER_BIND=127.0.0.1
-
-# ── Passed to Airflow workers so the DAG can reach the app database ───────────
-MI_DATABASE_URL=postgresql+psycopg2://mi:mi@mi-db:5432/market_insights
-MI_USE_NETWORK=true
+AIRFLOW_WEBSERVER_PORT=18089
+AIRFLOW_BASE_URL=http://localhost:18089
 ```
 
-### Generate a Fernet key
+Generation Fernet key:
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
----
+## 3) Lancement local (prod + airflow)
 
-## Starting the Full Stack (with Airflow)
+Depuis la racine du repo `market_insights`:
 
 ```bash
-# From the market_insights repo root
-
-# 1. Build the app image (only once, or after code changes)
-docker compose -f docker-compose.prod.yml build
-
-# 2. Start app + Airflow together
-docker compose \
-  -f docker-compose.prod.yml \
-  -f docker-compose.airflow.yml \
-  up -d
-
-# 3. Check that all containers are healthy
-docker compose \
-  -f docker-compose.prod.yml \
-  -f docker-compose.airflow.yml \
-  ps
+docker compose -f docker-compose.prod.yml -f docker-compose.airflow.yml up -d --build
 ```
 
-Expected containers:
-
-| Name | Port (host-bound) |
-|---|---|
-| `mi-api` | `127.0.0.1:18100` |
-| `mi-frontend` | `127.0.0.1:18180` |
-| `mi-db` | internal |
-| `airflow-db` | internal |
-| `airflow-webserver` | `127.0.0.1:8080` |
-| `airflow-scheduler` | — |
-
-### Starting without Airflow (original behaviour)
+Verifications:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml -f docker-compose.airflow.yml ps
+docker logs -f mi-airflow-scheduler
+docker logs -f mi-airflow-webserver
 ```
 
-The API still exposes `/etl/run/{ticker}` endpoints so ETL can be triggered manually.
+UI Airflow:
 
----
+- URL: `http://127.0.0.1:18089`
+- User: `AIRFLOW_ADMIN_USER`
+- Password: `AIRFLOW_ADMIN_PASSWORD`
 
-## Accessing the Airflow UI
+## 4) Trigger manuel du DAG
 
-Forward the webserver port locally (if running on a remote VPS):
+Par UI:
+
+1. Ouvrir Airflow
+2. DAGs -> `market_insights_daily`
+3. Trigger DAG
+
+Par CLI:
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 yannsmatti@doctumconsilium.com
+docker exec -it mi-airflow-scheduler airflow dags trigger market_insights_daily
+docker exec -it mi-airflow-scheduler airflow dags trigger market_insights_full_refresh
 ```
 
-Then open `http://localhost:8080` in your browser.
-
-- **Username:** `admin`
-- **Password:** `$AIRFLOW_ADMIN_PASSWORD` (from your `.env`)
-
----
-
-## Triggering the DAG Manually
-
-### Via the UI
-
-1. Open the Airflow UI → DAGs → `market_insights_daily`
-2. Click **▶ Trigger DAG**
-
-### Via the CLI
+Test d'une tache:
 
 ```bash
-docker exec -it airflow-scheduler \
-  airflow dags trigger market_insights_daily
+docker exec -it mi-airflow-scheduler airflow tasks test market_insights_daily extract_aapl 2026-01-01
 ```
 
-### Run a single task for debugging
+## 5) Integration production OVH
+
+La production OVH applicative utilise `docker-compose.ovh-apache.yml`.
+
+Pour integrer Airflow en prod, lancer avec deux fichiers compose:
 
 ```bash
-docker exec -it airflow-scheduler \
-  airflow tasks test market_insights_daily extract_aapl 2026-01-01
+docker compose -f docker-compose.ovh-apache.yml -f docker-compose.airflow.yml up -d --build
 ```
 
----
+Important:
 
-## Deploy to VPS
+- Apache public continue de router uniquement:
+  - `/` -> frontend (`127.0.0.1:18080`)
+  - `/api/` -> API (`127.0.0.1:18000`)
+- Airflow n'est pas route publiquement par Apache par defaut.
 
-The deploy script (`scripts/deploy/deploy.ovh.sh`) syncs the whole repo including the new files.
+## 6) Airflow sur VPN
+
+### Option recommandee: bind direct sur IP VPN
+
+Si le serveur a une IP VPN (ex: `10.8.0.2`), forcer:
+
+```dotenv
+AIRFLOW_WEBSERVER_BIND=10.8.0.2
+AIRFLOW_WEBSERVER_PORT=18089
+AIRFLOW_BASE_URL=http://10.8.0.2:18089
+```
+
+Puis relancer la stack compose avec Airflow.
+
+Acces UI depuis client VPN:
+
+```text
+http://10.8.0.2:18089
+```
+
+### Option stricte: localhost + tunnel
+
+Conserver:
+
+```dotenv
+AIRFLOW_WEBSERVER_BIND=127.0.0.1
+```
+
+Et utiliser:
 
 ```bash
-# On your local machine
+ssh -L 18089:127.0.0.1:18089 user@vps
+```
+
+## 7) Deployment script OVH
+
+Le script `scripts/deploy/deploy.ovh.sh` supporte maintenant:
+
+- `COMPOSE_FILE` (historique, fichier unique)
+- `COMPOSE_FILES` (nouveau, liste CSV de fichiers compose)
+
+Exemple `.env.ovh` pour prod + Airflow:
+
+```dotenv
+COMPOSE_FILES=docker-compose.ovh-apache.yml,docker-compose.airflow.yml
+AIRFLOW_WEBSERVER_BIND=10.8.0.2
+AIRFLOW_WEBSERVER_PORT=18089
+```
+
+Deploiement:
+
+```bash
 bash scripts/deploy/deploy.ovh.sh deploy .env.ovh
 ```
 
-SSH onto the VPS and restart with both compose files:
+## 8) Troubleshooting
 
-```bash
-ssh yannsmatti@doctumconsilium.com
-
-cd /opt/market_insights   # or wherever it's deployed
-
-docker compose \
-  -f docker-compose.prod.yml \
-  -f docker-compose.airflow.yml \
-  up -d --build
-```
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `airflow-init` exits with error | Check `AIRFLOW_FERNET_KEY` and `AIRFLOW_SECRET_KEY` are set |
-| DAG import error | Run `docker exec airflow-scheduler airflow dags list-import-errors` |
-| `market_insights` module not found | Ensure `requirements-airflow.txt` was installed; check `airflow-init` logs |
-| `run_etl` DB error | Verify `MI_DATABASE_URL` matches the `mi-db` service credentials |
-| RAG refresh fails | It's best-effort and logs a warning — check `airflow-scheduler` logs |
-| Webserver not accessible | Confirm `AIRFLOW_WEBSERVER_BIND` and SSH tunnel are correct |
-
----
-
-## File Map
-
-```
-market_insights/
-├── docker-compose.airflow.yml          # Airflow service stack (override)
-├── deploy/
-│   └── airflow/
-│       └── requirements-airflow.txt    # Python deps for Airflow containers
-└── market_insights/
-    └── etl/
-        └── dags/
-            └── market_insights_dag.py  # The DAG (auto-loaded by scheduler)
-```
+- `mi-airflow-init` fail: verifier `AIRFLOW_FERNET_KEY` et `AIRFLOW_SECRET_KEY`
+- DAG absent: `docker exec -it mi-airflow-scheduler airflow dags list`
+- Erreurs import DAG: `docker exec -it mi-airflow-scheduler airflow dags list-import-errors`
+- UI inaccessible:
+  - verifier `AIRFLOW_WEBSERVER_BIND`
+  - verifier pare-feu VPN
+  - verifier que le client est bien connecte au VPN
+- Erreur DB ETL: verifier credentials Postgres app (`POSTGRES_*`) et `MI_DATABASE_URL` injecte par compose

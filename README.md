@@ -63,6 +63,50 @@ En production, lancer de preference sans seed automatique:
 MI_RUN_SEED=false docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+### Airflow ETL (nouvelle orchestration)
+
+Le projet inclut maintenant un orchestrateur Airflow prêt pour la prod via `docker-compose.airflow.yml`.
+
+Lancement local avec stack prod + Airflow:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.airflow.yml up -d --build
+```
+
+Services ajoutés:
+
+- `mi-airflow-db` (Postgres metadata Airflow)
+- `mi-airflow-scheduler`
+- `mi-airflow-webserver`
+
+Variables minimales à définir dans `.env`:
+
+- `AIRFLOW_FERNET_KEY`
+- `AIRFLOW_SECRET_KEY`
+- `AIRFLOW_ADMIN_PASSWORD`
+
+Le DAG principal `market_insights_daily` exécute les ETL par ticker en parallèle puis déclenche le refresh RAG.
+
+### Airflow sur VPN (recommandé)
+
+Pour exposer l'UI Airflow uniquement sur ton VPN, fixe l'IP de bind:
+
+```dotenv
+AIRFLOW_WEBSERVER_BIND=10.8.0.2
+```
+
+Le port 8080 n'est alors plus exposé publiquement sur l'IP serveur. Depuis un client connecté au VPN:
+
+```bash
+http://10.8.0.2:18089
+```
+
+Si tu ne veux aucun bind réseau direct, garde `AIRFLOW_WEBSERVER_BIND=127.0.0.1` et passe par un tunnel SSH:
+
+```bash
+ssh -L 18089:127.0.0.1:18089 user@ton-vps
+```
+
 Changer le modèle LiteLLM par défaut:
 
 ```bash
@@ -114,6 +158,8 @@ pytest -v   # 40 passed
 ```
 
 Voir **ARCHITECTURE.md** pour les schémas et le détail technique.
+Pour les commandes Docker prêtes à l'emploi, voir **README_DOCKER.md**.
+Pour l'orchestration ETL Airflow (incluant VPN), voir **doc/AIRFLOW_ETL.md**.
 ), `generate(prompt, system=...)` (envoyer un prompt et recevoir une réponse), `models()` (lister les modèles disponibles). Chaque provider hérite de cette interface.
 
 L'endpoint `GET /llm/providers` interroge chaque provider en temps réel et retourne son statut de disponibilité ainsi que la liste de ses modèles. Le frontend utilise cette information pour afficher un indicateur vert (en ligne) ou gris (hors ligne) à côté de chaque provider dans le sélecteur.
