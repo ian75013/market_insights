@@ -11,7 +11,7 @@ New in v4:
 import logging
 
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -66,6 +66,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def strip_legacy_api_prefix(request: Request, call_next):
+    # k3s ingress may forward /api/* as-is; normalize to app-native routes.
+    path = request.scope.get("path", "")
+    if path == "/api":
+        request.scope["path"] = "/"
+    elif path.startswith("/api/"):
+        request.scope["path"] = path[4:] or "/"
+    return await call_next(request)
 
 service = MarketInsightService()
 hybrid_service = HybridInsightService()

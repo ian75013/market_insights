@@ -63,6 +63,20 @@ En production, lancer de preference sans seed automatique:
 MI_RUN_SEED=false docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+### Deploiement K3s (priorite production)
+
+Pour la production, la cible prioritaire n'est plus un VPS Docker autonome mais le cluster K3s partage du workspace.
+
+- Source de verite cluster: `../k3s-fromOVHVps/deploy/platform/10-market-insight.template.yaml`
+- Script de bootstrap global: `../k3s-fromOVHVps/scripts/bootstrap_k3s_multi_app_platform.sh`
+- Mise a jour iterative: `../k3s-fromOVHVps/scripts/build_and_push_workspace_images.sh` puis `../k3s-fromOVHVps/scripts/deploy_workspace_apps_to_k3s.sh`
+- URLs publiques attendues: `https://market-insight.doctumconsilium.com` et `https://api.market-insight.doctumconsilium.com`
+
+Regle pratique:
+
+- Docker Compose reste le chemin local/dev et le banc de validation rapide.
+- K3s est le chemin cible pour l'environnement mutualise, TLS, ingress, routage DNS et cohabitation avec les autres applications.
+
 ### Airflow ETL (nouvelle orchestration)
 
 Le projet inclut maintenant un orchestrateur Airflow prêt pour la prod via `docker-compose.airflow.yml`.

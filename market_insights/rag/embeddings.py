@@ -80,14 +80,24 @@ def _clean_text(text: str) -> str:
 
 class VectorStore:
     def __init__(self):
-        self._data: dict[str, list[dict[str, Any]]] = {}
+        self._data: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
     def index(self, ticker: str, chunks: list[dict]) -> int:
         if not chunks:
             return 0
+        _load_model()
         texts = [_clean_text(c["text"]) for c in chunks]
-        vectors = embed_texts(texts)
+        vectorizer = None
+        if _use_st:
+            vectors = embed_texts(texts)
+        else:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            # Keep one fitted TF-IDF vectorizer per ticker to avoid shape drift
+            # when indexing multiple symbols in sequence.
+            vectorizer = TfidfVectorizer(max_features=512, stop_words="english")
+            vectors = vectorizer.fit_transform(texts).toarray().astype(np.float32)
         entries = []
         for i, chunk in enumerate(chunks):
             entries.append({
@@ -97,19 +107,54 @@ class VectorStore:
                 "hash": hashlib.md5(texts[i].encode()).hexdigest()[:12],
             })
         with self._lock:
-            self._data[ticker.upper()] = entries
+            self._data[ticker.upper()] = {
+                "entries": entries,
+                "vectorizer": vectorizer,
+                "use_st": bool(_use_st),
+            }
         logger.info("Indexed %d chunks for %s", len(entries), ticker)
         return len(entries)
 
     def search(self, ticker: str, query: str, top_k: int = 5):
         with self._lock:
-            entries = self._data.get(ticker.upper(), [])
+            payload = self._data.get(ticker.upper())
+        if not payload:
+            return []
+
+        # Backward compatibility with potential in-memory legacy payload shape.
+        if isinstance(payload, list):
+            entries = payload
+            vectorizer = None
+            use_st = bool(_use_st)
+        else:
+            entries = payload.get("entries", [])
+            vectorizer = payload.get("vectorizer")
+            use_st = payload.get("use_st", bool(_use_st))
         if not entries:
             return []
-        q_vec = embed_query(query)
+
+        if use_st:
+            q_vec = embed_query(query)
+        else:
+            if vectorizer is None:
+                logger.warning(
+                    "RAG: missing TF-IDF vectorizer for %s; skipping vector search",
+                    ticker,
+                )
+                return []
+            q_vec = vectorizer.transform([query]).toarray().astype(np.float32)[0]
+
         scored = []
         for entry in entries:
-            sim = cosine_similarity(q_vec, entry["vector"])
+            try:
+                sim = cosine_similarity(q_vec, entry["vector"])
+            except ValueError as exc:
+                logger.warning(
+                    "RAG: skipped chunk due to vector shape mismatch for %s: %s",
+                    ticker,
+                    exc,
+                )
+                continue
             scored.append({
                 "text": entry["text"],
                 "score": round(float(sim), 4),
@@ -126,7 +171,10 @@ class VectorStore:
             return {
                 "tickers_indexed": list(self._data.keys()),
                 "total_chunks": sum(
-                    len(v) for v in self._data.values()
+                    len(v.get("entries", v))
+                    if isinstance(v, dict)
+                    else len(v)
+                    for v in self._data.values()
                 ),
             }
 

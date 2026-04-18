@@ -128,6 +128,17 @@ docker compose -f docker-compose.ovh-apache.yml ps
 docker compose -f docker-compose.ovh-apache.yml -f docker-compose.airflow.yml ps
 ```
 
+## K3s partage (priorite production)
+
+Pour la production mutualisee, le chemin recommande est desormais le cluster K3s du workspace.
+
+- Template applicatif: `../k3s-fromOVHVps/deploy/platform/10-market-insight.template.yaml`
+- Bootstrap global: `cd ../k3s-fromOVHVps && ./scripts/bootstrap_k3s_multi_app_platform.sh`
+- Deploiement iteratif: `cd ../k3s-fromOVHVps && ./scripts/build_and_push_workspace_images.sh && ./scripts/deploy_workspace_apps_to_k3s.sh`
+- Endpoints publics: `https://market-insight.doctumconsilium.com` et `https://api.market-insight.doctumconsilium.com`
+
+En bref: Docker Compose reste la reference locale, K3s devient la reference production.
+
 ## 6) Commandes Airflow utiles
 
 Lister les DAGs:
