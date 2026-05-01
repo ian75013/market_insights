@@ -29,21 +29,12 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 from datetime import datetime, timedelta
+
+import httpx
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-
-# ── Make market_insights importable inside Airflow containers ──────────────────
-# The repo root is mounted at /opt/airflow/dags/../../../  when using the
-# compose override — adjust the path to wherever the package lives inside
-# the container.  The requirements-airflow.txt installs the dependencies but
-# the package itself is not pip-installed; we add it to sys.path instead so
-# DAG edits on the host are reflected immediately without rebuilding.
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
 
 logger = logging.getLogger(__name__)
 
@@ -80,36 +71,20 @@ _DEFAULT_ARGS = {
 # ── Task callables ────────────────────────────────────────────────────────────
 
 def _etl_ticker(ticker: str, **_ctx) -> dict:
-    """Extract + load a single ticker.  Called by PythonOperator."""
-    from market_insights.db.session import SessionLocal
-    from market_insights.services.etl_service import run_etl
-
-    # Override DB URL from Airflow env if provided
-    db_url = os.getenv("MI_DATABASE_URL")
-    if db_url:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        engine = create_engine(db_url, future=True)
-        Session = sessionmaker(bind=engine)
-    else:
-        Session = SessionLocal
-
+    """Extract + load a single ticker via the market-insights API."""
     provider = "coingecko" if ticker in _CRYPTO else "yahoo"
     logger.info("[ETL] Starting %s via %s", ticker, provider)
-
-    db = Session()
-    try:
-        result = run_etl(db, ticker=ticker, provider=provider)
-        logger.info("[ETL] Done %s — %s", ticker, result)
-        return result
-    finally:
-        db.close()
+    url = f"{_MI_API_BASE}/etl/run"
+    with httpx.Client(timeout=300) as client:
+        r = client.post(url, params={"ticker": ticker, "provider": provider})
+        r.raise_for_status()
+    result = r.json()
+    logger.info("[ETL] Done %s — %s", ticker, result)
+    return result
 
 
 def _refresh_rag(**_ctx) -> None:
     """POST /rag/index/<ticker> for every ticker to rebuild vector store."""
-    import httpx
-
     for ticker in _TICKERS:
         url = f"{_MI_API_BASE}/rag/index/{ticker}"
         try:

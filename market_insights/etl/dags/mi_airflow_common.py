@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import time
 from datetime import timedelta
 
 import httpx
-
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
 
 logger = logging.getLogger(__name__)
 
@@ -95,33 +90,16 @@ def etl_cooldown_for_ticker(ticker: str) -> int:
     )
 
 
-def session_factory():
-    db_url = os.getenv("MI_DATABASE_URL")
-    if db_url:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-
-        engine = create_engine(db_url, future=True)
-        return sessionmaker(bind=engine)
-
-    from market_insights.db.session import SessionLocal
-
-    return SessionLocal
-
-
 def run_ticker_etl(ticker: str, log_prefix: str = "[AIRFLOW]") -> dict:
-    from market_insights.services.etl_service import run_etl
-
     provider = provider_for_ticker(ticker)
     logger.info("%s[ETL] Starting %s via %s", log_prefix, ticker, provider)
-    Session = session_factory()
-    db = Session()
-    try:
-        result = run_etl(db, ticker=ticker, provider=provider)
-        logger.info("%s[ETL] Done %s — %s", log_prefix, ticker, result)
-        return result
-    finally:
-        db.close()
+    url = f"{MI_API_BASE}/etl/run"
+    with httpx.Client(timeout=300) as client:
+        r = client.post(url, params={"ticker": ticker, "provider": provider})
+        r.raise_for_status()
+    result = r.json()
+    logger.info("%s[ETL] Done %s — %s", log_prefix, ticker, result)
+    return result
 
 
 def _call_api(path: str, method: str = "GET") -> None:
