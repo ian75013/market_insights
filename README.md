@@ -519,3 +519,8 @@ Ce projet peut être présenté selon plusieurs angles selon le poste visé.
 **Quant / Market Intelligence** — Moteur de détection de 14 signaux techniques sur chandeliers japonais. Modèle de juste valeur multifactoriel explicable. Score de confiance calibré. Niveaux pivot et support/résistance calculés.
 
 **Frontend / Fullstack** — Dashboard React avec 6 onglets, graphiques en chandeliers annotés (custom shapes Recharts), interface de chat RAG interactive, sélecteur de LLM avec feedback de disponibilité en temps réel. Formatage intelligent des prix (séparateurs de milliers, axe Y adaptatif pour les cryptos à 5+ chiffres). Détection automatique des tickers crypto côté client avec badge source visible.
+
+## How This Project Works (Operations)
+- Runtime and infra details are documented in [INFRASTRUCTURE.md](INFRASTRUCTURE.md).
+- Start from the local run section, then use the deployment section for production updates.
+- Keep changes reversible and validate health checks after rollout.

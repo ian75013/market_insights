@@ -1,0 +1,165 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!70!black,
+    citecolor=blue!70!black
+}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{listings}
+
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{doctum}{rgb}{0.10,0.30,0.60}
+
+\lstset{
+  backgroundcolor=\color{codegray},
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!40},
+  xleftmargin=1em,
+  framexleftmargin=0.5em
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{doctum}{\small\textbf{Doctum Consilium}}}
+\fancyhead[R]{\small\nouppercase{\leftmark}}
+\fancyfoot[C]{\thepage}
+
+\titleformat{\section}{\large\bfseries\color{doctum}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{doctum!80}}{}{0em}{}
+
+
+\begin{document}
+
+\title{
+  \textcolor{doctum}{\Large\textbf{Market Insights}} \\[0.5em]
+  \large Real-Time Market Intelligence Pipeline with NLP and RAG \\[0.3em]
+  \normalsize Technical Foundations and Architecture
+}
+\author{Doctum Consilium \\ \small\textit{Generated 2026-05-08}}
+\date{}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+Market data ingestion, NLP summarisation, and Retrieval-Augmented Generation pipeline powered by Apache Airflow, Python, and Docker.
+This document covers the theoretical foundations, architectural decisions,
+and key technical concepts required to understand, contribute to, and
+maintain this repository.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Overview}
+
+Market Insights is a data engineering and NLP pipeline that collects financial
+news and price data, extracts key insights via extractive summarisation and
+LLM-augmented RAG, and serves structured signals to downstream consumers.
+
+The pipeline is orchestrated by Apache Airflow and runs on a containerised
+stack (Docker Compose). Raw data from multiple connectors (Yahoo Finance,
+Alpaca, economic calendars) is stored in a vector database for semantic search.
+
+
+\section{Architecture}
+
+\begin{verbatim}
+Connectors (Yahoo/Alpaca/News) ──► Airflow DAGs ──► NLP Pipeline
+          │                                              │
+          ▼                                        Vector DB (FAISS)
+      PostgreSQL                                        │
+          │                                        RAG Query ──► LLM
+          └──────────────────────────── REST API ◄──────┘
+\end{verbatim}
+
+
+\section{Key Technical Concepts}
+\begin{itemize}[leftmargin=1.5em]
+  \item Apache Airflow: directed acyclic graph (DAG) scheduling; task dependencies, XCom for inter-task communication, operator types (PythonOperator, BashOperator, HttpSensor).
+  \item Extractive Summarisation: TF-IDF sentence scoring; token frequency weighted by inverse document frequency; $\text{score}(s) = \sum_{t \in s} \text{tf}(t) \cdot \text{idf}(t)$.
+  \item Vector Embeddings: sentence-transformers for semantic encoding; FAISS approximate nearest-neighbour (ANN) search; cosine similarity $\cos\theta = \frac{u \cdot v}{|u||v|}$.
+  \item RAG (Retrieval-Augmented Generation): relevant context retrieved from vector store is injected into the LLM prompt to ground responses in factual financial data.
+  \item Data Quality: price integrity tests (OHLCV consistency), connector health checks, deduplication by hash.
+\end{itemize}
+
+\section{Data Flow}
+
+Airflow DAG (scheduled) → Connector fetch → HTML strip + NLP clean →
+Embedding generation → FAISS upsert →
+On-demand RAG query → LLM enrichment → REST response.
+
+
+\section{Technology Stack}
+
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+Orchestration & Apache Airflow 2.x \\
+NLP & sentence-transformers, spaCy \\
+Vector store & FAISS (CPU) \\
+LLM proxy & LiteLLM \\
+Data sources & Yahoo Finance, Alpaca News API \\
+Database & PostgreSQL \\
+Container & Docker Compose \\
+\bottomrule
+\end{tabular}
+
+
+\section{Design Decisions}
+
+\begin{itemize}
+  \item Airflow chosen over cron for retries, visibility, and dependency management.
+  \item FAISS (CPU) preferred over managed vector DBs to avoid cloud egress costs.
+  \item Extractive summarisation is language-model-free and deterministic —
+    useful for offline/low-latency paths.
+\end{itemize}
+
+
+\section{Repository Structure}
+\begin{lstlisting}[language=bash,caption={Top-level directory layout}]
+market_insights/
+  .github/
+    copilot-instructions.md   # GitHub Copilot guardrails
+    agents/
+      ecr-secrets-agent.agent.md  # ECR secret rotation runbook
+  CLAUDE.md                   # Claude Code guardrails
+  GEMINI.md                   # Gemini CLI guardrails
+  INFRASTRUCTURE.md           # Operational runbook
+  ROADMAP.md                  # Execution log and roadmap
+  README.md                   # Project overview
+\end{lstlisting}
+
+\section{Contributing}
+\begin{enumerate}
+  \item Read \texttt{README.md}, \texttt{INFRASTRUCTURE.md}, and \texttt{ROADMAP.md} before any task.
+  \item Follow the Code Documentation Standard: every public function must have
+    a docstring (Google-style for Python, JSDoc for TypeScript, XML for C\#).
+  \item Run the guardrails validator before committing:
+    \begin{lstlisting}[language=bash]
+git add -A && ./.guardrails/bin/validate_guardrails.sh
+    \end{lstlisting}
+  \item For deployment or destructive operations, always use a named tmux session:
+    \begin{lstlisting}[language=bash]
+tmux new-session -A -s deploy-market_insights
+    \end{lstlisting}
+\end{enumerate}
+
+\end{document}

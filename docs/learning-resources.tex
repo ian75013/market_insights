@@ -1,0 +1,147 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    urlcolor=blue!70!black,
+    citecolor=blue!70!black
+}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{listings}
+
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{doctum}{rgb}{0.10,0.30,0.60}
+
+\lstset{
+  backgroundcolor=\color{codegray},
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{gray!40},
+  xleftmargin=1em,
+  framexleftmargin=0.5em
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{doctum}{\small\textbf{Doctum Consilium}}}
+\fancyhead[R]{\small\nouppercase{\leftmark}}
+\fancyfoot[C]{\thepage}
+
+\titleformat{\section}{\large\bfseries\color{doctum}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{doctum!80}}{}{0em}{}
+
+
+\begin{document}
+
+\title{
+  \textcolor{doctum}{\Large\textbf{Market Insights}} \\[0.5em]
+  \large Real-Time Market Intelligence Pipeline with NLP and RAG \\[0.3em]
+  \normalsize Learning Resources and Contributor Onboarding
+}
+\author{Doctum Consilium \\ \small\textit{Generated 2026-05-08}}
+\date{}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+This document provides a curated list of courses (Coursera, Pluralsight, A Cloud Guru),
+training repositories, and reference books to help contributors ramp up on the
+technologies used in \textbf{Market Insights}.
+Resources are selected for quality, relevance, and practical applicability.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Prerequisites}
+Before starting the courses below, ensure you are comfortable with:
+Python intermediate, SQL basics, basic NLP concepts, Docker fundamentals.
+
+\section{Coursera Courses}
+\begin{longtable}{p{6cm} p{1.5cm} p{7cm}}
+\toprule
+\textbf{Course} & \textbf{Link} & \textbf{Why relevant} \\
+\midrule
+\endhead
+  Natural Language Processing Specialization & \href{https://www.coursera.org/specializations/natural-language-processing}{\texttt{link}} & Tokenisation, embeddings, seq2seq models used in the NLP pipeline. \\
+  Data Engineering with Google Cloud & \href{https://www.coursera.org/professional-certificates/gcp-data-engineering}{\texttt{link}} & Pipeline patterns, batch vs streaming — Airflow parallels. \\
+  IBM Data Engineering Professional Certificate & \href{https://www.coursera.org/professional-certificates/ibm-data-engineer}{\texttt{link}} & SQL, ETL, Airflow, Kafka fundamentals. \\
+\bottomrule
+\caption{Coursera}
+\end{longtable}
+
+
+\section{Pluralsight Courses}
+\begin{longtable}{p{6cm} p{1.5cm} p{7cm}}
+\toprule
+\textbf{Course} & \textbf{Link} & \textbf{Why relevant} \\
+\midrule
+\endhead
+  Apache Airflow: The Hands-On Guide & \href{https://www.pluralsight.com/courses/apache-airflow-hands-on}{\texttt{link}} & DAG authoring, scheduling, XCom, sensors. \\
+  Applied Natural Language Processing in Python & \href{https://www.pluralsight.com/courses/python-natural-language-processing}{\texttt{link}} & Text preprocessing, TF-IDF, embeddings. \\
+\bottomrule
+\caption{Pluralsight}
+\end{longtable}
+
+
+\section{A Cloud Guru Courses}
+\begin{longtable}{p{6cm} p{1.5cm} p{7cm}}
+\toprule
+\textbf{Course} & \textbf{Link} & \textbf{Why relevant} \\
+\midrule
+\endhead
+  AWS Data Analytics Specialty & \href{https://acloudguru.com/course/aws-certified-data-analytics-specialty}{\texttt{link}} & Data pipeline patterns applicable to this architecture. \\
+\bottomrule
+\caption{A Cloud Guru}
+\end{longtable}
+
+
+\section{GitHub Training Repositories}
+\begin{itemize}[leftmargin=1.5em]
+  \item \href{https://github.com/apache/airflow}{\textbf{apache/airflow}} — Source, examples, and DAG best practices.
+  \item \href{https://github.com/facebookresearch/faiss}{\textbf{facebookresearch/faiss}} — Vector index internals; understand IVF, HNSW index types.
+  \item \href{https://github.com/UKPLab/sentence-transformers}{\textbf{UKPLab/sentence-transformers}} — Embedding models used for semantic search.
+  \item \href{https://github.com/langchain-ai/langchain}{\textbf{langchain-ai/langchain}} — RAG pipeline patterns and retriever abstractions.
+\end{itemize}
+
+\section{Reference Books}
+\begin{itemize}[leftmargin=1.5em]
+  \item \href{https://dataintensive.net/}{\textit{Designing Data-Intensive Applications}} — Martin Kleppmann. Foundational for pipeline reliability and data consistency.
+  \item \href{https://www.oreilly.com/library/view/natural-language-processing/9781098136789/}{\textit{Natural Language Processing with Transformers}} — Lewis Tunstall et al.. Transformer models, fine-tuning, embeddings.
+\end{itemize}
+
+\section{Suggested Learning Path}
+\begin{enumerate}
+  \item Complete prerequisites (1--2 weeks).
+  \item Work through the Coursera specialisation most relevant to the repo's domain (4--8 weeks).
+  \item Clone the repository, read \texttt{README.md} and \texttt{INFRASTRUCTURE.md}.
+  \item Run the service locally following the \textbf{Local Run} section of \texttt{INFRASTRUCTURE.md}.
+  \item Study the Pluralsight courses for the specific tools used (2--4 weeks, parallel).
+  \item Contribute a small fix or documentation improvement as a first PR.
+  \item Study the GitHub training repositories for advanced patterns.
+\end{enumerate}
+
+\section{Free Resources}
+\begin{itemize}
+  \item \href{https://docs.python.org/3/tutorial/}{\textbf{Python Official Tutorial}} — free, authoritative.
+  \item \href{https://kubernetes.io/docs/tutorials/}{\textbf{Kubernetes Interactive Tutorials}} — browser-based k8s labs.
+  \item \href{https://fastapi.tiangolo.com/tutorial/}{\textbf{FastAPI Tutorial}} — official, comprehensive.
+  \item \href{https://pytorch.org/tutorials/}{\textbf{PyTorch Tutorials}} — official, covers all levels.
+  \item \href{https://www.deeplearning.ai/short-courses/}{\textbf{DeepLearning.AI Short Courses}} — free, recent AI topics.
+\end{itemize}
+
+\end{document}
