@@ -52,6 +52,19 @@ This file defines Claude Code execution rules for `market_insights`.
 - macOS (zsh/bash) compatibility is required when the script uses only POSIX-standard commands.
 - Any exception must be documented with an operational alternative.
 
+## Git Commit Policy (Mandatory)
+- The commit author is always the git config user (`git config user.name` / `user.email`).
+- NEVER add a `Co-Authored-By:` trailer or any other AI attribution line to commits.
+- Write commit messages in the imperative mood, short subject (≤72 chars), body if needed.
+- Use conventional commits: `feat|fix|docs|chore|refactor|test|ci(scope): message`.
+
+## Session End Report (Mandatory)
+At the end of every significant work session, produce a brief compte rendu in the conversation containing:
+1. **Ce qui a été fait** — liste des changements effectués (fichiers, commits, déploiements).
+2. **Problèmes rencontrés** — erreurs, blocages, workarounds utilisés.
+3. **État du système** — santé des pods / services / CI si applicable.
+4. **Prochaines étapes** — ce qui reste à faire.
+
 ## Hooks (if present)
 - Preflight: `.claude/hooks/preflight.ps1` and `.claude/hooks/preflight.sh`
 - Post-task check: `.claude/hooks/post-task.ps1` and `.claude/hooks/post-task.sh`
