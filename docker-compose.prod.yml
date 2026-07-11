@@ -49,6 +49,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-market_insights}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-market_insights}
       USE_NETWORK: ${USE_NETWORK:-true}
       DEFAULT_PRICE_PROVIDER: ${DEFAULT_PRICE_PROVIDER:-auto}
+      COINGECKO_API_KEY: ${COINGECKO_API_KEY:-}
       LLM_BACKEND: ${LLM_BACKEND:-litellm}
       LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     alpha_vantage_api_key: str = ""
     fred_api_key: str = ""
     fmp_api_key: str = ""
+    # CoinGecko Demo API key (gratuite). Requise en production : l'API publique
+    # gratuite renvoie 403 depuis les IP d'hébergeurs (OVH, AWS…). Une clé Demo
+    # authentifie la requête et débloque l'accès. Vide = mode public (dev/local).
+    coingecko_api_key: str = ""
     sec_user_agent: str = "MarketInsights/1.0 contact@example.com"
 
     # ── LLM — multi-provider ──────────────────────────────────────

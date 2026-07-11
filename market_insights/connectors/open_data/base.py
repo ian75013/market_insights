@@ -40,11 +40,24 @@ class BaseHTTPConnector:
 
     # ── HTTP helpers ───────────────────────────────────────────────
 
+    def _extra_headers(self) -> dict[str, str]:
+        """En-têtes HTTP additionnels propres à un connecteur.
+
+        Surchargé par les sous-classes qui doivent authentifier leurs appels
+        (ex. CoinGecko envoie sa clé Demo). Par défaut : aucun en-tête en plus.
+
+        Returns:
+            dict[str, str]: en-têtes à fusionner avec le User-Agent commun.
+        """
+        return {}
+
     def _client(self) -> httpx.Client:
+        headers = {"User-Agent": settings.sec_user_agent}
+        headers.update(self._extra_headers())
         return httpx.Client(
             timeout=self.timeout,
             follow_redirects=True,
-            headers={"User-Agent": settings.sec_user_agent},
+            headers=headers,
         )
 
     def get_json(self, url: str, *, cache_key: str = "") -> dict | list:
