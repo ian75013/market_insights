@@ -42,6 +42,10 @@ services:
       COINGECKO_API_KEY: ${COINGECKO_API_KEY:-}
       LLM_BACKEND: ${LLM_BACKEND:-litellm}
       LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      # Réponses plafonnées à ~400 tokens : sur un modèle local CPU la
+      # génération est lente, or le prompt impose déjà « 10 phrases max ».
+      # Moins de tokens à générer = attente ~2× plus courte pour l'utilisateur.
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-400}
       LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://litellm:4000}
       LITELLM_API_KEY: ${LITELLM_API_KEY:-}
       OLLAMA_BASE_URL: http://ollama:11434
