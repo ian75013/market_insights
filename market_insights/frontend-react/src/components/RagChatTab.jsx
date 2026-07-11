@@ -3,7 +3,9 @@ import { Card, Label, Tag } from "./ui";
 import { ragChatStream, getLlmProviders, indexRag, getRagStats } from "../services/api";
 
 const PROV_COLORS = { litellm:"#111827", openai:"#10a37f", anthropic:"#d97706", mistral:"#f97316", groq:"#6366f1", lmstudio:"#a78bfa", fallback:"var(--muted)" };
-const FORCED_LITELLM_MODEL = "llama3.2:1b";
+// Modèle local le plus léger disponible sur la gateway (~2× plus rapide que
+// llama3.2:1b sur CPU). Priorité à la fluidité de la réponse en streaming.
+const FORCED_LITELLM_MODEL = "qwen2.5:0.5b";
 
 function visibleProviders(providers) {
   return providers.filter(provider => provider.name !== "ollama");
