@@ -206,11 +206,39 @@ class PriceProviderRouter:
 
         # Normalize Yahoo-style pairs: BTC-USD → BTC
         normalized = _normalize_crypto_ticker(ticker)
-        df = CoinGeckoPriceConnector(use_network=self.use_network).fetch(normalized)
+        try:
+            df = CoinGeckoPriceConnector(use_network=self.use_network).fetch(normalized)
+        except Exception as exc:
+            # En production, CoinGecko renvoie 403 depuis les IP d'hébergeurs
+            # (OVH) tant qu'aucune clé Demo n'est configurée. On bascule alors
+            # sur Yahoo Finance (paire BTC-USD), qui répond depuis les datacenters.
+            logger.warning(
+                "CoinGecko a échoué pour %s (%s) — repli sur Yahoo Finance",
+                ticker, exc,
+            )
+            df = self._from_yahoo_crypto(ticker)
         # Always use canonical ticker so BTC and BTC-USD map to same DB rows
-        if not df.empty:
+        if df is not None and not df.empty:
             df["ticker"] = canonical_ticker(ticker)
         return df
+
+    def _from_yahoo_crypto(self, ticker: str) -> pd.DataFrame:
+        """Repli crypto via Yahoo Finance en utilisant la paire '<SYM>-USD'.
+
+        Yahoo renvoie des données erronées pour un ticker crypto nu ('BTC' =
+        trust Grayscale à ~31 $), mais correctes pour la paire ('BTC-USD' =
+        vrai Bitcoin). On force donc le suffixe -USD avant l'appel.
+
+        Args:
+            ticker: ticker crypto ('BTC', 'BTC-USD', 'ETH'…).
+
+        Returns:
+            pd.DataFrame: bougies OHLCV, colonne ``ticker`` recanonisée en aval.
+        """
+        from market_insights.connectors.open_data.yahoo import YFinancePriceConnector
+
+        base = _normalize_crypto_ticker(ticker)
+        return YFinancePriceConnector().fetch(f"{base}-USD")
 
     def _from_ibkr(self, ticker: str) -> pd.DataFrame:
         return IBHistoricalFetcher().fetch_prices(ticker)

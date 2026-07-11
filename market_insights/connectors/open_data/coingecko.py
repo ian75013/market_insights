@@ -65,7 +65,22 @@ def is_crypto_ticker(ticker: str) -> bool:
     return normalize_crypto_ticker(ticker) in TICKER_MAP
 
 
-class CoinGeckoPriceConnector(BaseHTTPConnector):
+class _CoinGeckoBase(BaseHTTPConnector):
+    """Base commune aux connecteurs CoinGecko : gère la clé Demo.
+
+    L'API publique gratuite (`api.coingecko.com`) renvoie 403 depuis les IP
+    d'hébergeurs (OVH, AWS…). Une clé Demo gratuite, envoyée dans l'en-tête
+    `x-cg-demo-api-key`, authentifie la requête et débloque l'accès. Sans clé,
+    on reste en mode public (suffisant en local).
+    """
+
+    def _extra_headers(self) -> dict[str, str]:
+        if settings.coingecko_api_key:
+            return {"x-cg-demo-api-key": settings.coingecko_api_key}
+        return {}
+
+
+class CoinGeckoPriceConnector(_CoinGeckoBase):
     """Fetch crypto OHLC prices from CoinGecko."""
 
     provider_name = "coingecko"
@@ -144,7 +159,7 @@ class CoinGeckoPriceConnector(BaseHTTPConnector):
         return df
 
 
-class CoinGeckoInfoConnector(BaseHTTPConnector):
+class CoinGeckoInfoConnector(_CoinGeckoBase):
     """Fetch coin info from CoinGecko."""
 
     provider_name = "coingecko_info"
@@ -189,7 +204,7 @@ class CoinGeckoInfoConnector(BaseHTTPConnector):
         }
 
 
-class CoinGeckoGlobalConnector(BaseHTTPConnector):
+class CoinGeckoGlobalConnector(_CoinGeckoBase):
     """Fetch global crypto market data."""
 
     provider_name = "coingecko_global"
